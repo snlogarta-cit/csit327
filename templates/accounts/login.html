@@ -1,13 +1,105 @@
 {% extends 'accounts/base.html' %}
 
-{% block title %}Login{% endblock %}
+{% block title %}Log In | ATMosphere{% endblock %}
 
 {% block content %}
-    <h2>Login</h2>
-    <form method="post" action="{% url 'login' %}">
-        {% csrf_token %}
-        {{ form.as_p }}
-        <button type="submit">Login</button>
-    </form>
-    <p>Don't have an account? <a href="{% url 'register' %}">Register here</a>.</p>
+<div class="flex items-center justify-center py-6 sm:py-12">
+    <div class="w-full max-w-md">
+        
+        <!-- Auth Container Card -->
+        <div class="glass-card p-8 sm:p-10 relative overflow-hidden">
+            
+            <!-- Top Subtle Accent Header Bar -->
+            <div class="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-blue-600 via-sky-400 to-teal-400"></div>
+
+            <!-- Card Header -->
+            <div class="text-center mb-8">
+                <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-blue-50 border border-blue-100 text-blue-600 mb-4 shadow-sm">
+                    <i data-lucide="lock" class="w-8 h-8"></i>
+                </div>
+                <h2 class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
+                    Welcome Back
+                </h2>
+                <p class="text-sm text-slate-500 mt-1">
+                    Enter your credentials to access your ATMosphere account
+                </p>
+            </div>
+
+            <!-- Login Form -->
+            <form method="post" action="{% url 'login' %}" class="space-y-5">
+                {% csrf_token %}
+                
+                <!-- Non-field Errors -->
+                {% if form.non_field_errors %}
+                    <div class="bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-xl p-3 space-y-1">
+                        {% for error in form.non_field_errors %}
+                            <p class="flex items-center gap-1.5"><i data-lucide="alert-circle" class="w-4 h-4"></i> {{ error }}</p>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+
+                <!-- Username Field -->
+                <div class="form-group">
+                    <label for="{{ form.username.id_for_label }}" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+                        Username
+                    </label>
+                    <div class="relative">
+                        <i data-lucide="user" class="form-input-icon w-5 h-5"></i>
+                        {{ form.username }}
+                    </div>
+                    {% if form.username.errors %}
+                        <p class="text-xs text-rose-600 mt-1.5 font-medium flex items-center gap-1">
+                            <i data-lucide="x-circle" class="w-3.5 h-3.5"></i>
+                            {{ form.username.errors.0 }}
+                        </p>
+                    {% endif %}
+                </div>
+
+                <!-- Password Field -->
+                <div class="form-group">
+                    <div class="flex items-center justify-between mb-2">
+                        <label for="{{ form.password.id_for_label }}" class="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                            Password
+                        </label>
+                        <a href="#" class="text-xs font-semibold text-blue-600 hover:text-blue-700 hover:underline">
+                            Forgot?
+                        </a>
+                    </div>
+                    <div class="relative">
+                        <i data-lucide="key-round" class="form-input-icon w-5 h-5"></i>
+                        {{ form.password }}
+                    </div>
+                    {% if form.password.errors %}
+                        <p class="text-xs text-rose-600 mt-1.5 font-medium flex items-center gap-1">
+                            <i data-lucide="x-circle" class="w-3.5 h-3.5"></i>
+                            {{ form.password.errors.0 }}
+                        </p>
+                    {% endif %}
+                </div>
+
+                <!-- Submit Button -->
+                <button type="submit" class="w-full btn-primary-calm text-base py-3.5 mt-2">
+                    <span>Log In to Account</span>
+                    <i data-lucide="arrow-right" class="w-5 h-5"></i>
+                </button>
+            </form>
+
+            <!-- Bottom Redirect Link -->
+            <div class="mt-8 pt-6 border-t border-slate-100 text-center">
+                <p class="text-sm text-slate-600">
+                    Don't have an ATMosphere account? 
+                    <a href="{% url 'register' %}" class="font-bold text-blue-600 hover:text-blue-700 hover:underline inline-flex items-center gap-1">
+                        Register here <i data-lucide="chevron-right" class="w-4 h-4"></i>
+                    </a>
+                </p>
+            </div>
+        </div>
+
+        <!-- Security Badge -->
+        <div class="mt-6 flex items-center justify-center space-x-2 text-xs text-slate-500">
+            <i data-lucide="shield-check" class="w-4 h-4 text-emerald-600"></i>
+            <span>Protected by 256-bit Atmospheric Encryption</span>
+        </div>
+    </div>
+</div>
 {% endblock %}

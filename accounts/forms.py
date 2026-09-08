@@ -7,15 +7,27 @@ class RegistrationForm(forms.Form):
     username = forms.CharField(
         max_length=150,
         required=True,
-        widget=forms.TextInput(attrs={'placeholder': 'Username', 'autocomplete': 'username'})
+        widget=forms.TextInput(attrs={
+            'placeholder': 'Enter your username',
+            'autocomplete': 'username',
+            'class': 'form-input-custom font-medium text-slate-800 placeholder-slate-400'
+        })
     )
     password = forms.CharField(
         required=True,
-        widget=forms.PasswordInput(attrs={'placeholder': 'Password', 'autocomplete': 'new-password'})
+        widget=forms.PasswordInput(attrs={
+            'placeholder': 'Create a strong password',
+            'autocomplete': 'new-password',
+            'class': 'form-input-custom font-medium text-slate-800 placeholder-slate-400'
+        })
     )
     confirm_password = forms.CharField(
         required=True,
-        widget=forms.PasswordInput(attrs={'placeholder': 'Confirm Password', 'autocomplete': 'new-password'})
+        widget=forms.PasswordInput(attrs={
+            'placeholder': 'Confirm your password',
+            'autocomplete': 'new-password',
+            'class': 'form-input-custom font-medium text-slate-800 placeholder-slate-400'
+        })
     )
 
     def clean_username(self):
@@ -39,9 +51,17 @@ class LoginForm(forms.Form):
     username = forms.CharField(
         max_length=150,
         required=True,
-        widget=forms.TextInput(attrs={'placeholder': 'Username', 'autocomplete': 'username'})
+        widget=forms.TextInput(attrs={
+            'placeholder': 'Enter your username',
+            'autocomplete': 'username',
+            'class': 'form-input-custom font-medium text-slate-800 placeholder-slate-400'
+        })
     )
     password = forms.CharField(
         required=True,
-        widget=forms.PasswordInput(attrs={'placeholder': 'Password', 'autocomplete': 'current-password'})
+        widget=forms.PasswordInput(attrs={
+            'placeholder': 'Enter your password',
+            'autocomplete': 'current-password',
+            'class': 'form-input-custom font-medium text-slate-800 placeholder-slate-400'
+        })
     )

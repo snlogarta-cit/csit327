@@ -1,0 +1,107 @@
+{% extends 'base.html' %}
+
+{% block title %}Settings | ATMosphere{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto py-8">
+    
+    <!-- Header Section -->
+    <div class="flex items-center justify-between mb-8">
+        <div>
+            <h1 class="text-3xl font-extrabold text-slate-900 tracking-tight">Account Settings</h1>
+            <p class="text-sm text-slate-500 mt-1">Configure your account security, authentication, and platform preferences</p>
+        </div>
+        <a href="{% url 'home' %}" class="btn-secondary-calm text-sm">
+            <i data-lucide="arrow-left" class="w-4 h-4"></i>
+            <span>Back to Dashboard</span>
+        </a>
+    </div>
+
+    <div class="space-y-8">
+
+        <!-- Security & Password Section -->
+        <div class="glass-card p-8 relative overflow-hidden">
+            <div class="flex items-center gap-3 pb-6 mb-6 border-b border-slate-100">
+                <div class="w-10 h-10 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600">
+                    <i data-lucide="lock" class="w-5 h-5"></i>
+                </div>
+                <div>
+                    <h3 class="text-lg font-bold text-slate-900">Security & Password</h3>
+                    <p class="text-xs text-slate-500">Change your password to keep your account safe</p>
+                </div>
+            </div>
+
+            <form method="post" action="{% url 'settings' %}" class="space-y-5 max-w-xl">
+                {% csrf_token %}
+
+                {% for field in form %}
+                    <div class="form-group space-y-1">
+                        <label for="{{ field.id_for_label }}" class="block text-xs font-semibold text-slate-700 uppercase tracking-wider">
+                            {{ field.label }}
+                        </label>
+                        <div class="relative">
+                            {{ field }}
+                            <i data-lucide="key-round" class="form-input-icon w-4 h-4"></i>
+                        </div>
+                        {% if field.errors %}
+                            <p class="text-xs text-rose-600 font-medium mt-1">{{ field.errors|striptags }}</p>
+                        {% endif %}
+                    </div>
+                {% endfor %}
+
+                <div class="pt-4 flex items-center justify-start gap-3">
+                    <button type="submit" class="btn-primary-calm text-sm">
+                        <i data-lucide="shield-check" class="w-4 h-4"></i>
+                        <span>Update Password</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Preferences & Notifications (UI Mock controls) -->
+        <div class="glass-card p-8 relative overflow-hidden">
+            <div class="flex items-center gap-3 pb-6 mb-6 border-b border-slate-100">
+                <div class="w-10 h-10 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600">
+                    <i data-lucide="sliders" class="w-5 h-5"></i>
+                </div>
+                <div>
+                    <h3 class="text-lg font-bold text-slate-900">Preferences</h3>
+                    <p class="text-xs text-slate-500">Manage security alerts and application behavior</p>
+                </div>
+            </div>
+
+            <div class="space-y-4 max-w-2xl">
+                <div class="flex items-center justify-between p-4 bg-slate-50/70 border border-slate-100 rounded-xl">
+                    <div class="flex items-center gap-3">
+                        <div class="w-8 h-8 rounded-lg bg-blue-100/60 text-blue-600 flex items-center justify-center">
+                            <i data-lucide="bell" class="w-4 h-4"></i>
+                        </div>
+                        <div>
+                            <p class="text-sm font-semibold text-slate-800">Email Notifications</p>
+                            <p class="text-xs text-slate-500">Receive transactional updates and security alerts</p>
+                        </div>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" checked class="sr-only peer">
+                        <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                    </label>
+                </div>
+
+                <div class="flex items-center justify-between p-4 bg-slate-50/70 border border-slate-100 rounded-xl">
+                    <div class="flex items-center gap-3">
+                        <div class="w-8 h-8 rounded-lg bg-blue-100/60 text-blue-600 flex items-center justify-center">
+                            <i data-lucide="shield-alert" class="w-4 h-4"></i>
+                        </div>
+                        <div>
+                            <p class="text-sm font-semibold text-slate-800">Two-Factor Authentication (2FA)</p>
+                            <p class="text-xs text-slate-500">Enhance login security with multi-factor authorization</p>
+                        </div>
+                    </div>
+                    <span class="text-xs font-semibold px-2.5 py-1 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg">Enabled</span>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+{% endblock %}

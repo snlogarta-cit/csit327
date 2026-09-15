@@ -1,42 +1,1042 @@
-{% extends 'base.html' %}
+{% load static %}
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ATMosphere — Social ATM Map</title>
 
-{% block title %}Home | ATMosphere{% endblock %}
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
 
-{% block content %}
-<div class="flex items-center justify-center py-8 sm:py-16">
-    <div class="w-full max-w-lg">
-        
-        <!-- Glassmorphic Card Container -->
-        <div class="glass-card p-8 sm:p-10 relative overflow-hidden text-center space-y-6">
-            
-            <!-- Top Subtle Accent Header Bar -->
-            <div class="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-blue-600 via-sky-400 to-teal-400"></div>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
 
-            <!-- Home Header Icon & Title -->
-            <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-blue-50 border border-blue-100 text-blue-600 shadow-sm">
-                <i data-lucide="user-check" class="w-8 h-8"></i>
-            </div>
-            
-            <h2 class="text-3xl font-extrabold text-slate-900 tracking-tight">
-                Home
-            </h2>
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
 
-            <!-- Original Status Message with Calm Blue Styling -->
-            <div class="bg-blue-50/70 border border-blue-100/80 rounded-2xl p-4 text-slate-700 font-medium">
-                <p class="text-base">You are logged in as {{ username }}</p>
-            </div>
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+          integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV/XN/WLs=" crossorigin=""></script>
 
-            <!-- Logout Link -->
-            <div class="pt-4 border-t border-slate-100">
-                <p>
-                    <a href="{% url 'logout' %}" class="btn-secondary-calm text-sm inline-flex items-center gap-2">
-                        <i data-lucide="log-out" class="w-4 h-4 text-slate-500"></i>
-                        <span>Logout</span>
-                    </a>
-                </p>
-            </div>
+  <style>
+    /* ------------------------------------------------------------------ */
+    /* Layout helpers                                                       */
+    /* ------------------------------------------------------------------ */
+    html, body { height: 100%; margin: 0; overflow: hidden; }
+
+    #map {
+      width: 100%;
+      height: 100%;
+      min-height: 100%;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* Sidebar scrollable list */
+    #atm-list { overflow-y: auto; }
+
+    /* Status badge colours */
+    .badge-ONLINE    { background:#d1fae5; color:#065f46; }
+    .badge-NO_CASH   { background:#fee2e2; color:#991b1b; }
+    .badge-OFFLINE   { background:#f3f4f6; color:#374151; }
+    .badge-LONG_LINE { background:#fef3c7; color:#92400e; }
+    .badge-UNKNOWN   { background:#e5e7eb; color:#6b7280; }
+
+    /* Leaflet custom markers */
+    .marker-pin {
+      width: 28px; height: 28px;
+      border-radius: 50% 50% 50% 0;
+      transform: rotate(-45deg);
+      border: 3px solid #fff;
+      box-shadow: 0 2px 6px rgba(0,0,0,.35);
+    }
+    .marker-pin.online    { background: #10b981; }
+    .marker-pin.long_line { background: #f59e0b; }
+    .marker-pin.no_cash   { background: #ef4444; }
+    .marker-pin.offline   { background: #6b7280; }
+    .marker-pin.unknown   { background: #94a3b8; }
+
+    /* Popup tweaks */
+    .leaflet-popup-content { min-width: 220px; }
+
+    /* Thin scrollbar for sidebar list */
+    #atm-list::-webkit-scrollbar { width: 4px; }
+    #atm-list::-webkit-scrollbar-track { background: #f1f5f9; }
+    #atm-list::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 2px; }
+
+    /* Modal backdrop */
+    .modal-backdrop {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,.45);
+      backdrop-filter: blur(3px);
+      z-index: 1000;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .modal-box {
+      background: #fff;
+      border-radius: 1rem;
+      padding: 1.75rem;
+      width: 100%;
+      max-width: 460px;
+      max-height: 90vh;
+      overflow-y: auto;
+      box-shadow: 0 20px 60px rgba(0,0,0,.3);
+    }
+
+    /* ATM list card hover */
+    .atm-card { transition: background .15s; cursor: pointer; }
+    .atm-card:hover { background: #eff6ff; }
+
+    /* Topbar glass */
+    .topbar {
+      background: rgba(255,255,255,.88);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid #e2e8f0;
+    }
+  </style>
+</head>
+
+<body class="h-full flex flex-col">
+
+  <!-- ================================================================== -->
+  <!-- TOP BAR                                                              -->
+  <!-- ================================================================== -->
+  <header class="topbar flex items-center justify-between px-4 h-14 flex-shrink-0 z-50">
+    <a href="{% url 'home' %}" class="flex items-center gap-2.5">
+      <div class="w-8 h-8 rounded-xl bg-gradient-to-tr from-blue-700 to-sky-400
+                  flex items-center justify-center text-white shadow-md shadow-blue-500/25">
+        <i data-lucide="waves" class="w-4 h-4"></i>
+      </div>
+      <span class="text-lg font-extrabold tracking-tight text-slate-900">
+        ATM<span class="text-blue-600">osphere</span>
+      </span>
+      <span class="hidden sm:inline text-xs font-semibold text-blue-500 uppercase tracking-wider ml-1
+                   bg-blue-50 px-2 py-0.5 rounded-full">ATM Map</span>
+    </a>
+
+    <nav class="flex items-center gap-3">
+      <span class="text-sm text-slate-500 hidden md:block">
+        Welcome, <strong class="text-slate-700">{{ username }}</strong>
+      </span>
+      <a href="{% url 'profile' %}"
+         class="p-2 rounded-xl text-slate-500 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+         title="Profile">
+        <i data-lucide="user" class="w-5 h-5"></i>
+      </a>
+      <a href="{% url 'settings' %}"
+         class="p-2 rounded-xl text-slate-500 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+         title="Settings">
+        <i data-lucide="settings" class="w-5 h-5"></i>
+      </a>
+      <a href="{% url 'logout' %}"
+         class="p-2 rounded-xl text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+         title="Logout">
+        <i data-lucide="log-out" class="w-5 h-5"></i>
+      </a>
+    </nav>
+  </header>
+
+  <!-- ================================================================== -->
+  <!-- MAIN BODY — Sidebar + Map                                            -->
+  <!-- ================================================================== -->
+  <div class="flex flex-1 overflow-hidden">
+
+    <!-- ---------------------------------------------------------------- -->
+    <!-- LEFT SIDEBAR                                                       -->
+    <!-- ---------------------------------------------------------------- -->
+    <aside id="sidebar"
+           class="w-80 xl:w-96 flex-shrink-0 bg-white border-r border-slate-200
+                  flex flex-col z-40 shadow-lg">
+    
+      <!-- ── Sidebar Header ── -->
+      <div class="px-4 pt-4 pb-3 border-b border-slate-100 flex-shrink-0">
+        <h1 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+          <i data-lucide="map-pin" class="w-5 h-5 text-blue-600"></i>
+          Social ATM Map
+        </h1>
+        <p class="text-xs text-slate-500 mt-0.5">
+          Crowdsourced ATM status across the Philippines
+        </p>
+      </div>
+
+      <!-- ── Locate Me Button ── -->
+      <div class="px-4 py-3 border-b border-slate-100 flex-shrink-0">
+        <button id="btn-locate"
+                class="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700
+                       text-white text-sm font-semibold py-2.5 px-4 rounded-xl
+                       transition-colors shadow-sm shadow-blue-500/30">
+          <i data-lucide="crosshair" class="w-4 h-4"></i>
+          Locate Me &amp; Find Nearby ATMs
+        </button>
+        <p id="locate-status" class="text-xs text-slate-400 mt-1.5 text-center hidden"></p>
+      </div>
+
+      <!-- ── Filter Bar ── -->
+      <div class="px-4 py-3 border-b border-slate-100 flex-shrink-0 space-y-2">
+        <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Filter Pins</p>
+
+        <!-- Status filter -->
+        <div class="flex flex-wrap gap-1.5" id="status-filters">
+          <button data-filter-status="ALL"
+                  class="filter-btn-status active text-xs px-2.5 py-1 rounded-full border
+                         border-blue-600 bg-blue-600 text-white font-medium transition-colors">
+            All
+          </button>
+          <button data-filter-status="ONLINE"
+                  class="filter-btn-status text-xs px-2.5 py-1 rounded-full border
+                         border-emerald-500 text-emerald-700 font-medium transition-colors hover:bg-emerald-50">
+            Online
+          </button>
+          <button data-filter-status="NO_CASH"
+                  class="filter-btn-status text-xs px-2.5 py-1 rounded-full border
+                         border-red-400 text-red-700 font-medium transition-colors hover:bg-red-50">
+            No Cash
+          </button>
+          <button data-filter-status="OFFLINE"
+                  class="filter-btn-status text-xs px-2.5 py-1 rounded-full border
+                         border-slate-400 text-slate-600 font-medium transition-colors hover:bg-slate-50">
+            Offline
+          </button>
+          <button data-filter-status="LONG_LINE"
+                  class="filter-btn-status text-xs px-2.5 py-1 rounded-full border
+                         border-amber-400 text-amber-700 font-medium transition-colors hover:bg-amber-50">
+            Long Line
+          </button>
         </div>
 
+        <!-- Bank filter -->
+        <div class="flex items-center gap-2">
+          <i data-lucide="building-2" class="w-4 h-4 text-slate-400 flex-shrink-0"></i>
+          <select id="bank-filter"
+                  class="flex-1 text-xs border border-slate-200 rounded-lg px-2 py-1.5
+                         text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-300">
+            <option value="ALL">All Banks</option>
+            <option value="BDO">BDO Unibank</option>
+            <option value="BPI">BPI</option>
+            <option value="MBK">Metrobank</option>
+            <option value="LBP">LandBank</option>
+            <option value="UBP">UnionBank</option>
+            <option value="RCBC">RCBC</option>
+            <option value="SB">Security Bank</option>
+            <option value="PNB">PNB</option>
+            <option value="OTHER">Other</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- ── ATM List ── -->
+      <div id="atm-list" class="flex-1 divide-y divide-slate-100">
+        <!-- Populated by JS -->
+        <div id="atm-list-placeholder" class="flex flex-col items-center justify-center h-40 text-slate-400">
+          <i data-lucide="map" class="w-8 h-8 mb-2 opacity-40"></i>
+          <p class="text-sm">Use "Locate Me" or click the map</p>
+        </div>
+      </div>
+
+      <!-- ── Add ATM hint ── -->
+      <div class="px-4 py-3 border-t border-slate-100 flex-shrink-0 bg-slate-50">
+        <p class="text-xs text-slate-500 flex items-center gap-1.5">
+          <i data-lucide="mouse-pointer-click" class="w-3.5 h-3.5 text-blue-500"></i>
+          Click anywhere on the map to add a new ATM pin
+        </p>
+      </div>
+    </aside>
+
+    <!-- ---------------------------------------------------------------- -->
+    <!-- MAP                                                                -->
+    <!-- ---------------------------------------------------------------- -->
+    <div id="map" class="flex-1"></div>
+  </div><!-- end main body -->
+
+
+  <!-- ================================================================== -->
+  <!-- MODAL — Add New ATM                                                  -->
+  <!-- ================================================================== -->
+  <div id="modal-add-atm" class="modal-backdrop hidden">
+    <div class="modal-box">
+      <div class="flex items-center justify-between mb-5">
+        <h2 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+          <i data-lucide="map-pin-plus" class="w-5 h-5 text-blue-600"></i>
+          Add New ATM
+        </h2>
+        <button onclick="closeModal('modal-add-atm')"
+                class="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <form id="form-add-atm" class="space-y-4">
+        {% csrf_token %}
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 mb-1">ATM Name *</label>
+          <input type="text" id="add-name" required
+                 placeholder='e.g. "BDO Katipunan Branch ATM 1"'
+                 class="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm
+                        focus:outline-none focus:ring-2 focus:ring-blue-300" />
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 mb-1">Bank *</label>
+          <select id="add-bank" required
+                  class="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm
+                         focus:outline-none focus:ring-2 focus:ring-blue-300">
+            <option value="">Select bank…</option>
+            <option value="BDO">BDO Unibank</option>
+            <option value="BPI">Bank of the Philippine Islands</option>
+            <option value="MBK">Metrobank</option>
+            <option value="LBP">LandBank of the Philippines</option>
+            <option value="UBP">UnionBank</option>
+            <option value="RCBC">RCBC</option>
+            <option value="SB">Security Bank</option>
+            <option value="PNB">Philippine National Bank</option>
+            <option value="OTHER">Other</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 mb-1">Address</label>
+          <input type="text" id="add-address"
+                 placeholder="Street / Building / Landmark"
+                 class="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm
+                        focus:outline-none focus:ring-2 focus:ring-blue-300" />
+        </div>
+
+        <!-- Read-only coordinate display -->
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Latitude</label>
+            <input type="text" id="add-lat" readonly
+                   class="w-full border border-slate-100 bg-slate-50 rounded-xl px-3 py-2
+                          text-sm text-slate-500" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Longitude</label>
+            <input type="text" id="add-lng" readonly
+                   class="w-full border border-slate-100 bg-slate-50 rounded-xl px-3 py-2
+                          text-sm text-slate-500" />
+          </div>
+        </div>
+
+        <p id="add-atm-error" class="text-xs text-red-600 hidden"></p>
+
+        <div class="flex gap-3 pt-2">
+          <button type="button" onclick="closeModal('modal-add-atm')"
+                  class="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600
+                         text-sm font-medium hover:bg-slate-50 transition-colors">
+            Cancel
+          </button>
+          <button type="submit"
+                  class="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white
+                         text-sm font-semibold transition-colors shadow-sm shadow-blue-500/30">
+            Add ATM Pin
+          </button>
+        </div>
+      </form>
     </div>
-</div>
-{% endblock %}
+  </div>
+
+
+  <!-- ================================================================== -->
+  <!-- MODAL — Report ATM Status                                            -->
+  <!-- ================================================================== -->
+  <div id="modal-report" class="modal-backdrop hidden">
+    <div class="modal-box">
+      <div class="flex items-center justify-between mb-5">
+        <h2 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+          <i data-lucide="flag" class="w-5 h-5 text-amber-500"></i>
+          Report ATM Status
+        </h2>
+        <button onclick="closeModal('modal-report')"
+                class="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <!-- ATM name display -->
+      <p class="text-sm text-slate-500 mb-4">
+        Reporting for: <strong id="report-atm-name" class="text-slate-800"></strong>
+      </p>
+
+      <form id="form-report" class="space-y-4">
+        {% csrf_token %}
+        <input type="hidden" id="report-atm-id" />
+
+        <!-- Status radio buttons -->
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 mb-2">Status *</label>
+          <div class="grid grid-cols-2 gap-2">
+            <label class="status-radio-label flex items-center gap-2 border-2 border-slate-200
+                          rounded-xl p-3 cursor-pointer hover:border-emerald-400 transition-colors">
+              <input type="radio" name="report-status" value="ONLINE" class="accent-emerald-500" />
+              <span class="text-sm font-medium text-slate-700">✅ Online</span>
+            </label>
+            <label class="status-radio-label flex items-center gap-2 border-2 border-slate-200
+                          rounded-xl p-3 cursor-pointer hover:border-red-400 transition-colors">
+              <input type="radio" name="report-status" value="NO_CASH" class="accent-red-500" />
+              <span class="text-sm font-medium text-slate-700">💸 No Cash</span>
+            </label>
+            <label class="status-radio-label flex items-center gap-2 border-2 border-slate-200
+                          rounded-xl p-3 cursor-pointer hover:border-slate-400 transition-colors">
+              <input type="radio" name="report-status" value="OFFLINE" class="accent-slate-500" />
+              <span class="text-sm font-medium text-slate-700">🚫 Offline</span>
+            </label>
+            <label class="status-radio-label flex items-center gap-2 border-2 border-slate-200
+                          rounded-xl p-3 cursor-pointer hover:border-amber-400 transition-colors">
+              <input type="radio" name="report-status" value="LONG_LINE" class="accent-amber-500" />
+              <span class="text-sm font-medium text-slate-700">🕐 Long Line</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Tags multi-select -->
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 mb-2">Tags (optional)</label>
+          <div id="tag-checkboxes" class="flex flex-wrap gap-2">
+            <!-- Populated by JS after fetching /api/atms/tags/ -->
+            <span class="text-xs text-slate-400 italic">Loading tags…</span>
+          </div>
+        </div>
+
+        <!-- Note -->
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 mb-1">Note (optional)</label>
+          <textarea id="report-note" rows="2"
+                    placeholder="Any additional details?"
+                    class="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm resize-none
+                           focus:outline-none focus:ring-2 focus:ring-blue-300"></textarea>
+        </div>
+
+        <p id="report-error" class="text-xs text-red-600 hidden"></p>
+
+        <div class="flex gap-3 pt-2">
+          <button type="button" onclick="closeModal('modal-report')"
+                  class="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600
+                         text-sm font-medium hover:bg-slate-50 transition-colors">
+            Cancel
+          </button>
+          <button type="submit"
+                  class="flex-1 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white
+                         text-sm font-semibold transition-colors shadow-sm shadow-amber-500/30">
+            Submit Report
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+
+  <!-- ================================================================== -->
+  <!-- MODAL — ATM Detail / Info Sheet                                      -->
+  <!-- ================================================================== -->
+  <div id="modal-detail" class="modal-backdrop hidden">
+    <div class="modal-box">
+      <div class="flex items-center justify-between mb-4">
+        <h2 id="detail-title" class="text-lg font-bold text-slate-800"></h2>
+        <button onclick="closeModal('modal-detail')"
+                class="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+      <div id="detail-body" class="space-y-3 text-sm text-slate-700">
+        <!-- Populated by JS -->
+      </div>
+      <div class="mt-5 flex gap-3">
+        <button onclick="closeModal('modal-detail')"
+                class="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600
+                       text-sm font-medium hover:bg-slate-50 transition-colors">
+          Close
+        </button>
+        <button id="detail-report-btn"
+                class="flex-1 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white
+                       text-sm font-semibold transition-colors">
+          Report Status
+        </button>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ================================================================== -->
+  <!-- JAVASCRIPT                                                           -->
+  <!-- ================================================================== -->
+  <script>
+    /* ------------------------------------------------------------------ */
+    /* 0.  Init Lucide icons                                               */
+    /* ------------------------------------------------------------------ */
+    lucide.createIcons();
+
+    /* ------------------------------------------------------------------ */
+    /* 1.  CSRF helper (reads the Django CSRF cookie for Fetch requests)   */
+    /* ------------------------------------------------------------------ */
+    function getCsrfToken() {
+      return document.cookie.split(';')
+        .map(c => c.trim())
+        .find(c => c.startsWith('csrftoken='))
+        ?.split('=')[1] ?? '{{ csrf_token }}';
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* 2.  Leaflet Map Initialisation                                       */
+    /* ------------------------------------------------------------------ */
+    // Default centre: Metro Manila
+    const DEFAULT_LAT = 14.5995;
+    const DEFAULT_LNG = 120.9842;
+    const DEFAULT_ZOOM = 13;
+
+    const map = L.map('map', { zoomControl: true }).setView([DEFAULT_LAT, DEFAULT_LNG], DEFAULT_ZOOM);
+
+    // Fast, reliable CartoDB Voyager tile layer with OpenStreetMap attribution
+    const tileLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+      subdomains: 'abcd',
+      maxZoom: 20,
+    }).addTo(map);
+
+    // Fallback to standard OpenStreetMap tiles if CartoDB fails
+    tileLayer.on('tileerror', function() {
+      console.warn('CartoDB tile error, switching to OpenStreetMap standard tiles');
+      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors',
+        maxZoom: 19
+      }).addTo(map);
+    });
+
+    // Ensure Leaflet correctly calculates map container dimensions
+    setTimeout(() => { map.invalidateSize(); }, 250);
+    window.addEventListener('resize', () => map.invalidateSize());
+
+    /* ------------------------------------------------------------------ */
+    /* 3.  Marker factory — colour-coded by ATM status                     */
+    /* ------------------------------------------------------------------ */
+    const STATUS_CLASSES = {
+      ONLINE:    'online',
+      LONG_LINE: 'long_line',
+      NO_CASH:   'no_cash',
+      OFFLINE:   'offline',
+      UNKNOWN:   'unknown',
+    };
+
+    function createPinIcon(status) {
+      const cls = STATUS_CLASSES[status] || 'unknown';
+      return L.divIcon({
+        className: '',
+        html: `<div class="marker-pin ${cls}"></div>`,
+        iconSize:   [28, 28],
+        iconAnchor: [14, 28],   // tip of the pin points to the coordinate
+        popupAnchor:[0, -28],
+      });
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* 4.  Application state                                               */
+    /* ------------------------------------------------------------------ */
+    let allAtms        = [];        // Full GeoJSON feature array from server
+    let markerLayer    = L.layerGroup().addTo(map);  // All ATM markers
+    let userMarker     = null;      // Blue dot for user position
+    let activeFilters  = { status: 'ALL', bank: 'ALL' };
+    let tagsCache      = [];        // Cached tag list from /api/atms/tags/
+
+    /* ------------------------------------------------------------------ */
+    /* 5.  Fetch all ATMs on page load                                     */
+    /* ------------------------------------------------------------------ */
+    async function loadAllATMs() {
+      try {
+        const res  = await fetch('/api/atms/');
+        if (!res.ok) throw new Error(`Server error: ${res.status}`);
+        const data = await res.json();
+        allAtms = data.features || [];
+        renderMarkers(allAtms);
+        renderSidebarList(allAtms);
+      } catch (err) {
+        console.error('Failed to load ATMs:', err);
+      }
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* 6.  Fetch nearby ATMs (after Locate Me)                             */
+    /* ------------------------------------------------------------------ */
+    async function loadNearbyATMs(lat, lng, radius = 3000) {
+      try {
+        const url  = `/api/atms/nearby/?lat=${lat}&lng=${lng}&radius=${radius}`;
+        const res  = await fetch(url);
+        if (!res.ok) throw new Error(`Server error: ${res.status}`);
+        const data = await res.json();
+        allAtms = data.features || [];
+        renderMarkers(allAtms);
+        renderSidebarList(allAtms);
+      } catch (err) {
+        console.error('Failed to load nearby ATMs:', err);
+      }
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* 7.  Render markers on the Leaflet map                               */
+    /* ------------------------------------------------------------------ */
+    function renderMarkers(features) {
+      markerLayer.clearLayers();
+
+      const filtered = applyFilters(features);
+
+      filtered.forEach(feature => {
+        const p   = feature.properties;
+        const geo = feature.geometry;           // { type:"Point", coordinates:[lng,lat] }
+        const lat = geo.coordinates[1];
+        const lng = geo.coordinates[0];
+
+        const marker = L.marker([lat, lng], { icon: createPinIcon(p.current_status) });
+
+        // Build popup HTML
+        marker.bindPopup(buildPopupHtml(feature), { maxWidth: 280 });
+
+        // Clicking the marker also highlights the sidebar card
+        marker.on('click', () => highlightSidebarCard(feature.id));
+
+        markerLayer.addLayer(marker);
+      });
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* 8.  Build popup HTML for a GeoJSON feature                          */
+    /* ------------------------------------------------------------------ */
+    function buildPopupHtml(feature) {
+      const p = feature.properties;
+
+      const statusBadgeHtml = `
+        <span class="inline-block px-2 py-0.5 rounded-full text-xs font-semibold badge-${p.current_status}">
+          ${p.current_status_label}
+        </span>`;
+
+      const tagsHtml = (p.active_tags && p.active_tags.length)
+        ? p.active_tags.map(t =>
+            `<span class="inline-block bg-slate-100 text-slate-600 text-xs px-2 py-0.5 rounded-full">${t.name}</span>`
+          ).join(' ')
+        : '<span class="text-slate-400 text-xs italic">No tags</span>';
+
+      const reportedHtml = p.last_reported_by
+        ? `<p class="text-xs text-slate-400 mt-1">Reported ${p.last_reported_at} by <strong>${p.last_reported_by}</strong></p>`
+        : `<p class="text-xs text-slate-400 mt-1">No reports yet — be the first!</p>`;
+
+      return `
+        <div class="font-sans">
+          <p class="font-bold text-slate-800 text-sm leading-tight mb-1">${escapeHtml(p.name)}</p>
+          <p class="text-xs text-slate-500 mb-2">${escapeHtml(p.bank_display)}</p>
+          <div class="mb-2">${statusBadgeHtml}</div>
+          <div class="flex flex-wrap gap-1 mb-2">${tagsHtml}</div>
+          ${reportedHtml}
+          <div class="flex gap-2 mt-3">
+            <button
+              onclick="openDetailModal(${feature.id})"
+              class="flex-1 text-xs bg-slate-100 hover:bg-slate-200 text-slate-700
+                     font-medium py-1.5 rounded-lg transition-colors">
+              Details
+            </button>
+            <button
+              onclick="openReportModal(${feature.id}, '${escapeHtml(p.name)}')"
+              class="flex-1 text-xs bg-amber-500 hover:bg-amber-600 text-white
+                     font-medium py-1.5 rounded-lg transition-colors">
+              Report
+            </button>
+          </div>
+        </div>`;
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* 9.  Sidebar ATM list                                                 */
+    /* ------------------------------------------------------------------ */
+    function renderSidebarList(features) {
+      const list      = document.getElementById('atm-list');
+      const placeholder = document.getElementById('atm-list-placeholder');
+      const filtered  = applyFilters(features);
+
+      if (!filtered.length) {
+        list.innerHTML = '';
+        list.appendChild(placeholder);
+        placeholder.classList.remove('hidden');
+        return;
+      }
+
+      placeholder.classList.add('hidden');
+      list.innerHTML = filtered.map(f => buildSidebarCard(f)).join('');
+      // Re-init Lucide for dynamically inserted icons
+      lucide.createIcons({ node: list });
+    }
+
+    function buildSidebarCard(feature) {
+      const p = feature.properties;
+      return `
+        <div class="atm-card px-4 py-3" id="sidebar-card-${feature.id}"
+             onclick="focusMarker(${feature.id})">
+          <div class="flex items-start justify-between gap-2">
+            <div class="flex-1 min-w-0">
+              <p class="text-sm font-semibold text-slate-800 truncate">${escapeHtml(p.name)}</p>
+              <p class="text-xs text-slate-500 truncate">${escapeHtml(p.bank_display)}</p>
+            </div>
+            <span class="inline-block px-2 py-0.5 rounded-full text-xs font-semibold
+                         badge-${p.current_status} flex-shrink-0">
+              ${p.current_status_label}
+            </span>
+          </div>
+          ${p.address ? `<p class="text-xs text-slate-400 mt-1 truncate">${escapeHtml(p.address)}</p>` : ''}
+          ${p.last_reported_at
+            ? `<p class="text-xs text-slate-400 mt-1">Updated ${p.last_reported_at}</p>`
+            : '<p class="text-xs text-slate-300 mt-1 italic">No reports yet</p>'}
+        </div>`;
+    }
+
+    function highlightSidebarCard(id) {
+      document.querySelectorAll('.atm-card').forEach(el => el.classList.remove('bg-blue-50'));
+      const card = document.getElementById(`sidebar-card-${id}`);
+      if (card) {
+        card.classList.add('bg-blue-50');
+        card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* 10. Focus / pan map to an ATM when sidebar card is clicked           */
+    /* ------------------------------------------------------------------ */
+    function focusMarker(atmId) {
+      highlightSidebarCard(atmId);
+      const feature = allAtms.find(f => f.id === atmId);
+      if (!feature) return;
+      const [lng, lat] = feature.geometry.coordinates;
+      map.setView([lat, lng], Math.max(map.getZoom(), 16));
+
+      // Open the popup on the right marker
+      markerLayer.eachLayer(marker => {
+        const pos = marker.getLatLng();
+        if (Math.abs(pos.lat - lat) < 0.000001 && Math.abs(pos.lng - lng) < 0.000001) {
+          marker.openPopup();
+        }
+      });
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* 11. Filter logic                                                     */
+    /* ------------------------------------------------------------------ */
+    function applyFilters(features) {
+      return features.filter(f => {
+        const p = f.properties;
+        const statusOk = activeFilters.status === 'ALL' || p.current_status === activeFilters.status;
+        const bankOk   = activeFilters.bank   === 'ALL' || p.bank === activeFilters.bank;
+        return statusOk && bankOk;
+      });
+    }
+
+    // Status filter buttons
+    document.querySelectorAll('.filter-btn-status').forEach(btn => {
+      btn.addEventListener('click', () => {
+        // Toggle active styling
+        document.querySelectorAll('.filter-btn-status').forEach(b => {
+          b.classList.remove('bg-blue-600', 'text-white', 'border-blue-600',
+                             'bg-emerald-500', 'bg-red-500', 'bg-slate-500', 'bg-amber-500');
+        });
+        btn.classList.add('bg-blue-600', 'text-white', 'border-blue-600');
+        activeFilters.status = btn.dataset.filterStatus;
+        renderMarkers(allAtms);
+        renderSidebarList(allAtms);
+      });
+    });
+
+    // Bank filter select
+    document.getElementById('bank-filter').addEventListener('change', e => {
+      activeFilters.bank = e.target.value;
+      renderMarkers(allAtms);
+      renderSidebarList(allAtms);
+    });
+
+    /* ------------------------------------------------------------------ */
+    /* 12. Locate Me button                                                 */
+    /* ------------------------------------------------------------------ */
+    document.getElementById('btn-locate').addEventListener('click', () => {
+      if (!navigator.geolocation) {
+        alert('Geolocation is not supported by your browser.');
+        return;
+      }
+
+      const statusEl = document.getElementById('locate-status');
+      statusEl.textContent = 'Detecting location…';
+      statusEl.classList.remove('hidden');
+
+      navigator.geolocation.getCurrentPosition(
+        pos => {
+          const { latitude: lat, longitude: lng } = pos.coords;
+          statusEl.textContent = `Located at ${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+
+          // Pan map to user location
+          map.setView([lat, lng], 15);
+
+          // Place / move user's blue dot marker
+          const userIcon = L.circleMarker([lat, lng], {
+            radius: 8, fillColor: '#3b82f6', color: '#fff',
+            weight: 2, opacity: 1, fillOpacity: 0.9,
+          });
+          if (userMarker) userMarker.remove();
+          userMarker = userIcon.addTo(map).bindPopup('📍 You are here').openPopup();
+
+          // Fetch nearby ATMs from API
+          loadNearbyATMs(lat, lng, 3000);
+        },
+        err => {
+          statusEl.textContent = `Location error: ${err.message}`;
+          console.warn('Geolocation error:', err);
+        },
+        { enableHighAccuracy: true, timeout: 10000 }
+      );
+    });
+
+    /* ------------------------------------------------------------------ */
+    /* 13. Click-to-add ATM pin on map                                     */
+    /* ------------------------------------------------------------------ */
+    map.on('click', e => {
+      const { lat, lng } = e.latlng;
+      document.getElementById('add-lat').value = lat.toFixed(6);
+      document.getElementById('add-lng').value = lng.toFixed(6);
+      openModal('modal-add-atm');
+    });
+
+    /* ------------------------------------------------------------------ */
+    /* 14. Modal helpers                                                   */
+    /* ------------------------------------------------------------------ */
+    function openModal(id) {
+      document.getElementById(id).classList.remove('hidden');
+    }
+    function closeModal(id) {
+      document.getElementById(id).classList.add('hidden');
+    }
+
+    // Close modal on backdrop click
+    document.querySelectorAll('.modal-backdrop').forEach(el => {
+      el.addEventListener('click', e => {
+        if (e.target === el) closeModal(el.id);
+      });
+    });
+
+    /* ------------------------------------------------------------------ */
+    /* 15. Submit new ATM (Add ATM modal form)                             */
+    /* ------------------------------------------------------------------ */
+    document.getElementById('form-add-atm').addEventListener('submit', async e => {
+      e.preventDefault();
+      const errorEl = document.getElementById('add-atm-error');
+      errorEl.classList.add('hidden');
+
+      const payload = {
+        name:      document.getElementById('add-name').value.trim(),
+        bank:      document.getElementById('add-bank').value,
+        address:   document.getElementById('add-address').value.trim(),
+        latitude:  parseFloat(document.getElementById('add-lat').value),
+        longitude: parseFloat(document.getElementById('add-lng').value),
+      };
+
+      if (!payload.name || !payload.bank) {
+        errorEl.textContent = 'Name and bank are required.';
+        errorEl.classList.remove('hidden');
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/atms/add/', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCsrfToken(),
+          },
+          body: JSON.stringify(payload),
+        });
+
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(JSON.stringify(err));
+        }
+
+        closeModal('modal-add-atm');
+        document.getElementById('form-add-atm').reset();
+        // Reload all ATMs so the new pin appears immediately
+        await loadAllATMs();
+      } catch (err) {
+        errorEl.textContent = `Failed to add ATM: ${err.message}`;
+        errorEl.classList.remove('hidden');
+        console.error(err);
+      }
+    });
+
+    /* ------------------------------------------------------------------ */
+    /* 16. Report Status modal                                             */
+    /* ------------------------------------------------------------------ */
+    async function openReportModal(atmId, atmName) {
+      // Close any other open modal first
+      closeModal('modal-detail');
+
+      document.getElementById('report-atm-id').value   = atmId;
+      document.getElementById('report-atm-name').textContent = atmName;
+      document.getElementById('report-note').value = '';
+      document.getElementById('report-error').classList.add('hidden');
+      // Deselect all radios
+      document.querySelectorAll('[name="report-status"]').forEach(r => r.checked = false);
+
+      // Load tags if not already cached
+      await ensureTagsLoaded();
+      openModal('modal-report');
+    }
+
+    async function ensureTagsLoaded() {
+      if (tagsCache.length) {
+        renderTagCheckboxes();
+        return;
+      }
+      try {
+        const res  = await fetch('/api/atms/tags/');
+        if (!res.ok) return;
+        tagsCache  = await res.json();
+        renderTagCheckboxes();
+      } catch (err) {
+        console.error('Failed to load tags:', err);
+      }
+    }
+
+    function renderTagCheckboxes() {
+      const container = document.getElementById('tag-checkboxes');
+      if (!tagsCache.length) {
+        container.innerHTML = '<span class="text-xs text-slate-400 italic">No tags available</span>';
+        return;
+      }
+      container.innerHTML = tagsCache.map(tag => `
+        <label class="flex items-center gap-1.5 text-xs text-slate-700 bg-slate-100
+                       hover:bg-blue-50 px-2.5 py-1.5 rounded-full cursor-pointer transition-colors">
+          <input type="checkbox" name="report-tag" value="${tag.id}"
+                 class="accent-blue-600 w-3 h-3" />
+          ${escapeHtml(tag.name)}
+        </label>`).join('');
+    }
+
+    document.getElementById('form-report').addEventListener('submit', async e => {
+      e.preventDefault();
+      const errorEl = document.getElementById('report-error');
+      errorEl.classList.add('hidden');
+
+      const statusEl = document.querySelector('[name="report-status"]:checked');
+      if (!statusEl) {
+        errorEl.textContent = 'Please select a status.';
+        errorEl.classList.remove('hidden');
+        return;
+      }
+
+      const selectedTags = Array.from(
+        document.querySelectorAll('[name="report-tag"]:checked')
+      ).map(cb => parseInt(cb.value));
+
+      const payload = {
+        atm:    parseInt(document.getElementById('report-atm-id').value),
+        status: statusEl.value,
+        note:   document.getElementById('report-note').value.trim(),
+        tags:   selectedTags,
+      };
+
+      try {
+        const res = await fetch('/api/atms/report/', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCsrfToken(),
+          },
+          body: JSON.stringify(payload),
+        });
+
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(JSON.stringify(err));
+        }
+
+        closeModal('modal-report');
+        // Refresh the map data so the pin colour updates immediately
+        await loadAllATMs();
+      } catch (err) {
+        errorEl.textContent = `Failed to submit report: ${err.message}`;
+        errorEl.classList.remove('hidden');
+        console.error(err);
+      }
+    });
+
+    /* ------------------------------------------------------------------ */
+    /* 17. Detail modal                                                    */
+    /* ------------------------------------------------------------------ */
+    function openDetailModal(atmId) {
+      const feature = allAtms.find(f => f.id === atmId);
+      if (!feature) return;
+      const p = feature.properties;
+
+      document.getElementById('detail-title').textContent = p.name;
+      document.getElementById('detail-report-btn').onclick =
+        () => openReportModal(atmId, p.name);
+
+      const tagsHtml = (p.active_tags && p.active_tags.length)
+        ? p.active_tags.map(t =>
+            `<span class="inline-block bg-slate-100 text-slate-600 text-xs px-2 py-0.5 rounded-full">${escapeHtml(t.name)}</span>`
+          ).join(' ')
+        : '<span class="text-slate-400 italic text-xs">None</span>';
+
+      document.getElementById('detail-body').innerHTML = `
+        <div class="flex items-center gap-2">
+          <span class="text-xs text-slate-500 w-24 flex-shrink-0">Bank</span>
+          <span class="font-semibold">${escapeHtml(p.bank_display)}</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="text-xs text-slate-500 w-24 flex-shrink-0">Status</span>
+          <span class="inline-block px-2 py-0.5 rounded-full text-xs font-semibold badge-${p.current_status}">
+            ${p.current_status_label}
+          </span>
+        </div>
+        ${p.address ? `
+        <div class="flex items-start gap-2">
+          <span class="text-xs text-slate-500 w-24 flex-shrink-0 pt-0.5">Address</span>
+          <span>${escapeHtml(p.address)}</span>
+        </div>` : ''}
+        <div class="flex items-start gap-2">
+          <span class="text-xs text-slate-500 w-24 flex-shrink-0 pt-0.5">Tags</span>
+          <div class="flex flex-wrap gap-1">${tagsHtml}</div>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="text-xs text-slate-500 w-24 flex-shrink-0">Reports</span>
+          <span>${p.report_count} crowd report${p.report_count !== 1 ? 's' : ''}</span>
+        </div>
+        ${p.last_reported_at ? `
+        <div class="flex items-center gap-2">
+          <span class="text-xs text-slate-500 w-24 flex-shrink-0">Last update</span>
+          <span>${p.last_reported_at} by <strong>${escapeHtml(p.last_reported_by)}</strong></span>
+        </div>` : ''}
+        <div class="flex items-center gap-2">
+          <span class="text-xs text-slate-500 w-24 flex-shrink-0">Coordinates</span>
+          <span class="font-mono text-xs">
+            ${feature.geometry.coordinates[1].toFixed(5)},
+            ${feature.geometry.coordinates[0].toFixed(5)}
+          </span>
+        </div>`;
+
+      closeModal('modal-report');
+      openModal('modal-detail');
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* 18. Utility — XSS-safe HTML escaping                                */
+    /* ------------------------------------------------------------------ */
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* 19. Bootstrap — load all ATMs on page ready                         */
+    /* ------------------------------------------------------------------ */
+    loadAllATMs();
+
+  </script>
+</body>
+</html>

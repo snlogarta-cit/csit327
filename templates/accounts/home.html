@@ -1,9 +1,42 @@
 {% extends 'accounts/base.html' %}
 
-{% block title %}Home{% endblock %}
+{% block title %}Home | ATMosphere{% endblock %}
 
 {% block content %}
-    <h2>Home</h2>
-    <p>You are logged in as {{ username }}</p>
-    <p><a href="{% url 'logout' %}">Logout</a></p>
+<div class="flex items-center justify-center py-8 sm:py-16">
+    <div class="w-full max-w-lg">
+        
+        <!-- Glassmorphic Card Container -->
+        <div class="glass-card p-8 sm:p-10 relative overflow-hidden text-center space-y-6">
+            
+            <!-- Top Subtle Accent Header Bar -->
+            <div class="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-blue-600 via-sky-400 to-teal-400"></div>
+
+            <!-- Home Header Icon & Title -->
+            <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-blue-50 border border-blue-100 text-blue-600 shadow-sm">
+                <i data-lucide="user-check" class="w-8 h-8"></i>
+            </div>
+            
+            <h2 class="text-3xl font-extrabold text-slate-900 tracking-tight">
+                Home
+            </h2>
+
+            <!-- Original Status Message with Calm Blue Styling -->
+            <div class="bg-blue-50/70 border border-blue-100/80 rounded-2xl p-4 text-slate-700 font-medium">
+                <p class="text-base">You are logged in as {{ username }}</p>
+            </div>
+
+            <!-- Logout Link -->
+            <div class="pt-4 border-t border-slate-100">
+                <p>
+                    <a href="{% url 'logout' %}" class="btn-secondary-calm text-sm inline-flex items-center gap-2">
+                        <i data-lucide="log-out" class="w-4 h-4 text-slate-500"></i>
+                        <span>Logout</span>
+                    </a>
+                </p>
+            </div>
+        </div>
+
+    </div>
+</div>
 {% endblock %}

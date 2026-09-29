@@ -1,0 +1,126 @@
+{% extends 'base.html' %}
+
+{% block title %}Profile | ATMosphere{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto py-8">
+    
+    <!-- Header Section -->
+    <div class="flex items-center justify-between mb-8">
+        <div>
+            <h1 class="text-3xl font-extrabold text-slate-900 tracking-tight">Account Profile</h1>
+            <p class="text-sm text-slate-500 mt-1">Manage your personal information and account preferences</p>
+        </div>
+        <a href="{% url 'home' %}" class="btn-secondary-calm text-sm">
+            <i data-lucide="arrow-left" class="w-4 h-4"></i>
+            <span>Back to Dashboard</span>
+        </a>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+
+        <!-- User Summary Card -->
+        <div class="lg:col-span-1 space-y-6">
+            <div class="glass-card p-6 text-center relative overflow-hidden">
+                <div class="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-blue-600 via-sky-400 to-teal-400"></div>
+
+                <div class="w-24 h-24 mx-auto mt-2 rounded-2xl bg-gradient-to-tr from-blue-700 via-blue-600 to-sky-400 flex items-center justify-center text-white text-3xl font-bold shadow-xl shadow-blue-500/25">
+                    {{ user_obj.username|first|upper }}
+                </div>
+
+                <h2 class="mt-4 text-xl font-bold text-slate-900">
+                    {% if user_obj.first_name %}{{ user_obj.first_name }} {{ user_obj.last_name }}{% else %}{{ user_obj.username }}{% endif %}
+                </h2>
+                <p class="text-xs text-blue-600 font-semibold tracking-wide uppercase mt-0.5">@{{ user_obj.username }}</p>
+
+                <div class="mt-6 pt-6 border-t border-slate-100 text-left space-y-3 text-sm">
+                    <div class="flex items-center justify-between text-slate-600">
+                        <span class="flex items-center gap-2">
+                            <i data-lucide="mail" class="w-4 h-4 text-slate-400"></i>
+                            Email:
+                        </span>
+                        <span class="font-medium text-slate-800 text-xs">{{ user_obj.email|default:"Not set" }}</span>
+                    </div>
+
+                    <div class="flex items-center justify-between text-slate-600">
+                        <span class="flex items-center gap-2">
+                            <i data-lucide="calendar" class="w-4 h-4 text-slate-400"></i>
+                            Joined:
+                        </span>
+                        <span class="font-medium text-slate-800 text-xs">{{ user_obj.date_joined|date:"M d, Y" }}</span>
+                    </div>
+
+                    <div class="flex items-center justify-between text-slate-600">
+                        <span class="flex items-center gap-2">
+                            <i data-lucide="shield-check" class="w-4 h-4 text-emerald-500"></i>
+                            Status:
+                        </span>
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            Active Account
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Edit Details Form -->
+        <div class="lg:col-span-2">
+            <div class="glass-card p-8 relative overflow-hidden">
+                <div class="flex items-center gap-3 pb-6 mb-6 border-b border-slate-100">
+                    <div class="w-10 h-10 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600">
+                        <i data-lucide="user-cog" class="w-5 h-5"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-bold text-slate-900">Personal Information</h3>
+                        <p class="text-xs text-slate-500">Update your account name and email contact</p>
+                    </div>
+                </div>
+
+                <form method="post" action="{% url 'profile' %}" class="space-y-5">
+                    {% csrf_token %}
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div class="form-group space-y-1">
+                            <label for="id_first_name" class="block text-xs font-semibold text-slate-700 uppercase tracking-wider">
+                                First Name
+                            </label>
+                            <div class="relative">
+                                {{ form.first_name }}
+                                <i data-lucide="user" class="form-input-icon w-4 h-4"></i>
+                            </div>
+                        </div>
+
+                        <div class="form-group space-y-1">
+                            <label for="id_last_name" class="block text-xs font-semibold text-slate-700 uppercase tracking-wider">
+                                Last Name
+                            </label>
+                            <div class="relative">
+                                {{ form.last_name }}
+                                <i data-lucide="user" class="form-input-icon w-4 h-4"></i>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group space-y-1">
+                        <label for="id_email" class="block text-xs font-semibold text-slate-700 uppercase tracking-wider">
+                            Email Address
+                        </label>
+                        <div class="relative">
+                            {{ form.email }}
+                            <i data-lucide="mail" class="form-input-icon w-4 h-4"></i>
+                        </div>
+                    </div>
+
+                    <div class="pt-4 flex items-center justify-end gap-3 border-t border-slate-100">
+                        <button type="submit" class="btn-primary-calm text-sm">
+                            <i data-lucide="save" class="w-4 h-4"></i>
+                            <span>Save Changes</span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+    </div>
+</div>
+{% endblock %}

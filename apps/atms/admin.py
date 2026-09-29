@@ -1,49 +1,93 @@
 """
 ATM Social Map — Django Admin Registration
 ============================================
-Registers ATM, Tag, and ATMStatusReport with the Django admin site.
-The ATM model uses a GIS-aware ModelAdmin (GeoModelAdmin) to render
-an OpenLayers map widget for the location PointField.
+Registers Bank, CardNetwork, NetworkAlliance, ATM, ATMNetwork, StatusReport,
+and ATMReport with the Django admin site.
 """
 
 from django.contrib import admin
-from django.contrib.gis.admin import GISModelAdmin
 
-from .models import ATM, ATMStatusReport, Tag
+from .models import (
+    ATM,
+    ATMNetwork,
+    ATMReport,
+    Bank,
+    CardNetwork,
+    NetworkAlliance,
+    StatusReport,
+)
+
+try:
+    from django.contrib.gis.admin import GISModelAdmin
+    BaseATMAdmin = GISModelAdmin
+except Exception:
+    BaseATMAdmin = admin.ModelAdmin
+
+
+@admin.register(Bank)
+class BankAdmin(admin.ModelAdmin):
+    list_display = ['bank_id', 'bank_name', 'logo_url']
+    search_fields = ['bank_name']
+
+
+@admin.register(CardNetwork)
+class CardNetworkAdmin(admin.ModelAdmin):
+    list_display = ['network_id', 'network_name', 'logo_url']
+    search_fields = ['network_name']
+
+
+@admin.register(NetworkAlliance)
+class NetworkAllianceAdmin(admin.ModelAdmin):
+    list_display = ['alliance_id', 'bank', 'card_network', 'is_fee_free', 'surcharge_amt']
+    list_filter = ['is_fee_free', 'bank', 'card_network']
+    search_fields = ['bank__bank_name', 'card_network__network_name']
+
+
+class ATMNetworkInline(admin.TabularInline):
+    model = ATMNetwork
+    extra = 1
 
 
 @admin.register(ATM)
-class ATMAdmin(GISModelAdmin):
-    """Admin view for ATMs with an interactive map widget for the location field."""
+class ATMAdmin(BaseATMAdmin):
+    """Admin view for ATMs."""
 
-    list_display  = ['name', 'bank', 'address', 'created_by', 'created_at']
-    list_filter   = ['bank', 'created_at']
-    search_fields = ['name', 'address', 'created_by__username']
-    readonly_fields = ['created_at']
-    ordering      = ['-created_at']
+    list_display = ['atm_id', 'name', 'bank', 'latitude', 'longitude', 'is_active', 'created_at', 'updated_at']
+    list_filter = ['bank', 'is_active', 'created_at', 'updated_at']
+    search_fields = ['name', 'address_line', 'bank__bank_name']
+    readonly_fields = ['created_at', 'updated_at']
+    ordering = ['-created_at']
+    inlines = [ATMNetworkInline]
 
-    # GISModelAdmin renders an OpenLayers map widget for the PointField
     gis_widget_kwargs = {
         'attrs': {
             'default_zoom': 13,
-            'default_lon':  121.0,   # Manila longitude
-            'default_lat':  14.58,   # Manila latitude
+            'default_lon': 121.0,
+            'default_lat': 14.58,
         }
     }
 
 
-@admin.register(Tag)
-class TagAdmin(admin.ModelAdmin):
-    list_display  = ['name', 'slug']
-    search_fields = ['name', 'slug']
-    prepopulated_fields = {'slug': ('name',)}
+@admin.register(ATMNetwork)
+class ATMNetworkAdmin(admin.ModelAdmin):
+    list_display = ['atm_network_id', 'atm', 'network']
+    search_fields = ['atm__name', 'network__network_name']
+    list_filter = ['network']
 
 
-@admin.register(ATMStatusReport)
-class ATMStatusReportAdmin(admin.ModelAdmin):
-    list_display  = ['atm', 'status', 'user', 'created_at']
-    list_filter   = ['status', 'created_at']
-    search_fields = ['atm__name', 'user__username', 'note']
-    readonly_fields = ['created_at']
-    filter_horizontal = ['tags']
+@admin.register(StatusReport)
+class StatusReportAdmin(admin.ModelAdmin):
+    list_display = ['status_report_id', 'atm', 'user', 'is_online', 'has_cash', 'created_at', 'updated_at']
+    list_filter = ['is_online', 'has_cash', 'created_at', 'updated_at']
+    search_fields = ['atm__name', 'user__username']
+    readonly_fields = ['created_at', 'updated_at']
+    ordering = ['-created_at']
+
+
+@admin.register(ATMReport)
+class ATMReportAdmin(admin.ModelAdmin):
+    list_display = ['report_id', 'atm', 'user', 'report_type', 'actual_fee', 'created_at', 'updated_at']
+    list_filter = ['report_type', 'created_at', 'updated_at']
+    search_fields = ['atm__name', 'user__username', 'comment']
+    readonly_fields = ['created_at', 'updated_at']
     ordering = ['-created_at']

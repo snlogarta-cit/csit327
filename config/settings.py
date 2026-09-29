@@ -74,11 +74,10 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    # GeoDjango — must come before any app that uses PostGIS models
-    'django.contrib.gis',
+    # GeoDjango — loaded if native GIS libraries (GDAL/GEOS) are present
+    *(['django.contrib.gis', 'rest_framework_gis'] if _os.path.exists(_OSGEO4W) else []),
     # Django REST Framework
     'rest_framework',
-    'rest_framework_gis',
     # ATMosphere feature apps
     'apps.atms',       # Core ATM Social Map feature
     'apps.login',
@@ -133,7 +132,7 @@ DATABASES = {
         'NAME': os.getenv('DB_NAME', 'postgres'),
         'USER': os.getenv('DB_USER', 'postgres'),
         'PASSWORD': os.getenv('DB_PASSWORD', ''),
-        'HOST': os.getenv('DB_HOST', 'localhost'),
+        'HOST': os.getenv('DB_HOST', 'db.ppggpdbeyzztcpunuren.supabase.co'),
         'PORT': os.getenv('DB_PORT', '5432'),
         'OPTIONS': {
             # Supabase connection pooler uses PgBouncer; disable prepared

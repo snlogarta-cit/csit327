@@ -1,0 +1,14 @@
+Student Name: Sophia Gabrielle N. Logarta
+Section: F2
+Project Title: ATMosphere
+GitHub Repository URL: https://github.com/snlogarta-cit/csit327
+
+Development Date: November 10, 2026
+Development Time: 3:00 PM - 6:00 PM
+
+Submitted Evidence:
+1. Application Screenshots
+2. Git Source Code Changes
+3. Git Commit History
+4. GitHub Commit History Screenshots
+5. Baseline Commit Evidence

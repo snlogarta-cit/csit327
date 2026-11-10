@@ -57,6 +57,7 @@
     .marker-pin.no_cash   { background: #ef4444; }
     .marker-pin.offline   { background: #6b7280; }
     .marker-pin.unknown   { background: #94a3b8; }
+    .marker-pin.new_pin   { background: #059669; box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.4); }
 
     /* Popup tweaks */
     .leaflet-popup-content { min-width: 220px; }
@@ -118,7 +119,7 @@
 
     <nav class="flex items-center gap-3">
       <span class="text-sm text-slate-500 hidden md:block">
-        Welcome, <strong class="text-slate-700">{{ username }}</strong>
+        You are logged in as <strong class="text-slate-700 font-semibold">{{ username }}</strong><span class="sr-only">You are logged in as {{ username }}</span>
       </span>
       <a href="{% url 'profile' %}"
          class="p-2 rounded-xl text-slate-500 hover:text-blue-600 hover:bg-blue-50 transition-colors"
@@ -161,8 +162,19 @@
         </p>
       </div>
 
+      <!-- ── Add ATM Button ── -->
+      <div class="px-4 pt-3 pb-2 flex-shrink-0">
+        <button id="btn-start-add" onclick="startAddMode()"
+                class="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700
+                       text-white text-sm font-semibold py-2.5 px-4 rounded-xl
+                       transition-all shadow-sm shadow-emerald-500/25 group">
+          <i data-lucide="map-pin-plus" class="w-4 h-4 group-hover:scale-110 transition-transform"></i>
+          Add an ATM
+        </button>
+      </div>
+
       <!-- ── Locate Me Button ── -->
-      <div class="px-4 py-3 border-b border-slate-100 flex-shrink-0">
+      <div class="px-4 pb-3 border-b border-slate-100 flex-shrink-0">
         <button id="btn-locate"
                 class="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700
                        text-white text-sm font-semibold py-2.5 px-4 rounded-xl
@@ -213,15 +225,6 @@
                   class="flex-1 text-xs border border-slate-200 rounded-lg px-2 py-1.5
                          text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-300">
             <option value="ALL">All Banks</option>
-            <option value="BDO">BDO Unibank</option>
-            <option value="BPI">BPI</option>
-            <option value="MBK">Metrobank</option>
-            <option value="LBP">LandBank</option>
-            <option value="UBP">UnionBank</option>
-            <option value="RCBC">RCBC</option>
-            <option value="SB">Security Bank</option>
-            <option value="PNB">PNB</option>
-            <option value="OTHER">Other</option>
           </select>
         </div>
       </div>
@@ -231,23 +234,37 @@
         <!-- Populated by JS -->
         <div id="atm-list-placeholder" class="flex flex-col items-center justify-center h-40 text-slate-400">
           <i data-lucide="map" class="w-8 h-8 mb-2 opacity-40"></i>
-          <p class="text-sm">Use "Locate Me" or click the map</p>
+          <p class="text-sm">Use "Locate Me" or click "Add an ATM"</p>
         </div>
       </div>
 
       <!-- ── Add ATM hint ── -->
       <div class="px-4 py-3 border-t border-slate-100 flex-shrink-0 bg-slate-50">
-        <p class="text-xs text-slate-500 flex items-center gap-1.5">
-          <i data-lucide="mouse-pointer-click" class="w-3.5 h-3.5 text-blue-500"></i>
-          Click anywhere on the map to add a new ATM pin
-        </p>
+        <button onclick="startAddMode()" class="w-full text-xs text-emerald-700 hover:text-emerald-800 font-medium flex items-center justify-center gap-1.5 py-1">
+          <i data-lucide="map-pin-plus" class="w-3.5 h-3.5 text-emerald-600"></i>
+          Click "Add an ATM" to place a pin on map
+        </button>
       </div>
     </aside>
 
     <!-- ---------------------------------------------------------------- -->
-    <!-- MAP                                                                -->
+    <!-- MAP CONTAINER                                                     -->
     <!-- ---------------------------------------------------------------- -->
-    <div id="map" class="flex-1"></div>
+    <div id="map-container" class="flex-1 relative h-full">
+      <div id="map" class="w-full h-full"></div>
+
+      <!-- Add ATM Mode Floating Banner -->
+      <div id="add-mode-banner" class="hidden absolute top-4 left-1/2 -translate-x-1/2 z-[1000] bg-slate-900/90 text-white px-5 py-2.5 rounded-2xl shadow-xl flex items-center gap-4 backdrop-blur-md border border-slate-700">
+        <div class="flex items-center gap-2 text-sm font-medium">
+          <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span>Click anywhere on the map to place the ATM marker.</span>
+        </div>
+        <button type="button" onclick="cancelAddMode()"
+                class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded-lg border border-slate-600 font-semibold transition-colors">
+          Cancel
+        </button>
+      </div>
+    </div>
   </div><!-- end main body -->
 
 
@@ -258,10 +275,10 @@
     <div class="modal-box">
       <div class="flex items-center justify-between mb-5">
         <h2 class="text-lg font-bold text-slate-800 flex items-center gap-2">
-          <i data-lucide="map-pin-plus" class="w-5 h-5 text-blue-600"></i>
+          <i data-lucide="map-pin-plus" class="w-5 h-5 text-emerald-600"></i>
           Add New ATM
         </h2>
-        <button onclick="closeModal('modal-add-atm')"
+        <button type="button" onclick="cancelAddMode()"
                 class="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100">
           <i data-lucide="x" class="w-4 h-4"></i>
         </button>
@@ -275,63 +292,64 @@
           <input type="text" id="add-name" required
                  placeholder='e.g. "BDO Katipunan Branch ATM 1"'
                  class="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm
-                        focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                        focus:outline-none focus:ring-2 focus:ring-emerald-400" />
         </div>
 
         <div>
           <label class="block text-xs font-semibold text-slate-600 mb-1">Bank *</label>
           <select id="add-bank" required
                   class="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm
-                         focus:outline-none focus:ring-2 focus:ring-blue-300">
+                         focus:outline-none focus:ring-2 focus:ring-emerald-400 bg-white">
             <option value="">Select bank…</option>
-            <option value="BDO">BDO Unibank</option>
-            <option value="BPI">Bank of the Philippine Islands</option>
-            <option value="MBK">Metrobank</option>
-            <option value="LBP">LandBank of the Philippines</option>
-            <option value="UBP">UnionBank</option>
-            <option value="RCBC">RCBC</option>
-            <option value="SB">Security Bank</option>
-            <option value="PNB">Philippine National Bank</option>
-            <option value="OTHER">Other</option>
           </select>
         </div>
 
         <div>
-          <label class="block text-xs font-semibold text-slate-600 mb-1">Address</label>
-          <input type="text" id="add-address"
+          <label class="block text-xs font-semibold text-slate-600 mb-1">Address *</label>
+          <input type="text" id="add-address" required
                  placeholder="Street / Building / Landmark"
                  class="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm
-                        focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                        focus:outline-none focus:ring-2 focus:ring-emerald-400" />
         </div>
 
-        <!-- Read-only coordinate display -->
+        <!-- Coordinates display and manual edit -->
         <div class="grid grid-cols-2 gap-3">
           <div>
-            <label class="block text-xs font-semibold text-slate-600 mb-1">Latitude</label>
-            <input type="text" id="add-lat" readonly
-                   class="w-full border border-slate-100 bg-slate-50 rounded-xl px-3 py-2
-                          text-sm text-slate-500" />
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Latitude *</label>
+            <input type="number" step="any" id="add-lat" required
+                   class="w-full border border-slate-200 rounded-xl px-3 py-2
+                          text-sm text-slate-700 font-mono focus:outline-none focus:ring-2 focus:ring-emerald-400" />
           </div>
           <div>
-            <label class="block text-xs font-semibold text-slate-600 mb-1">Longitude</label>
-            <input type="text" id="add-lng" readonly
-                   class="w-full border border-slate-100 bg-slate-50 rounded-xl px-3 py-2
-                          text-sm text-slate-500" />
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Longitude *</label>
+            <input type="number" step="any" id="add-lng" required
+                   class="w-full border border-slate-200 rounded-xl px-3 py-2
+                          text-sm text-slate-700 font-mono focus:outline-none focus:ring-2 focus:ring-emerald-400" />
+          </div>
+        </div>
+        <p class="text-[11px] text-slate-400">💡 Drag the green marker on the map or type coordinates directly.</p>
+
+        <!-- Supported Card Networks -->
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 mb-1.5">Supported Card Networks</label>
+          <div id="add-networks-container" class="grid grid-cols-2 gap-2 p-2.5 bg-slate-50 border border-slate-100 rounded-xl max-h-36 overflow-y-auto">
+            <span class="text-xs text-slate-400 italic">Loading networks…</span>
           </div>
         </div>
 
-        <p id="add-atm-error" class="text-xs text-red-600 hidden"></p>
+        <p id="add-atm-error" class="text-xs text-red-600 hidden font-medium"></p>
+        <p id="add-atm-success" class="text-xs text-emerald-600 hidden font-medium"></p>
 
         <div class="flex gap-3 pt-2">
-          <button type="button" onclick="closeModal('modal-add-atm')"
+          <button type="button" onclick="cancelAddMode()"
                   class="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600
                          text-sm font-medium hover:bg-slate-50 transition-colors">
             Cancel
           </button>
-          <button type="submit"
-                  class="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white
-                         text-sm font-semibold transition-colors shadow-sm shadow-blue-500/30">
-            Add ATM Pin
+          <button type="submit" id="btn-submit-add-atm"
+                  class="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white
+                         text-sm font-semibold transition-colors shadow-sm shadow-emerald-500/30 flex items-center justify-center gap-2">
+            <span>Add ATM Pin</span>
           </button>
         </div>
       </form>
@@ -340,87 +358,129 @@
 
 
   <!-- ================================================================== -->
-  <!-- MODAL — Report ATM Status                                            -->
+  <!-- MODAL — Report ATM Status & Issues                                   -->
   <!-- ================================================================== -->
   <div id="modal-report" class="modal-backdrop hidden">
     <div class="modal-box">
-      <div class="flex items-center justify-between mb-5">
+      <div class="flex items-center justify-between mb-3">
         <h2 class="text-lg font-bold text-slate-800 flex items-center gap-2">
           <i data-lucide="flag" class="w-5 h-5 text-amber-500"></i>
-          Report ATM Status
+          Report ATM
         </h2>
-        <button onclick="closeModal('modal-report')"
+        <button type="button" onclick="closeModal('modal-report')"
                 class="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100">
           <i data-lucide="x" class="w-4 h-4"></i>
         </button>
       </div>
 
       <!-- ATM name display -->
-      <p class="text-sm text-slate-500 mb-4">
-        Reporting for: <strong id="report-atm-name" class="text-slate-800"></strong>
-      </p>
+      <div class="p-3 bg-slate-50 rounded-xl border border-slate-100 mb-4">
+        <p class="text-xs text-slate-400 uppercase tracking-wider font-semibold">Reporting for ATM</p>
+        <p class="text-sm font-bold text-slate-800 mt-0.5" id="report-atm-name"></p>
+        <p class="text-xs text-slate-500" id="report-atm-bank"></p>
+      </div>
 
-      <form id="form-report" class="space-y-4">
+      <!-- Reporting Tabs -->
+      <div class="flex border-b border-slate-200 mb-4">
+        <button type="button" id="tab-btn-status" onclick="switchReportTab('status')"
+                class="flex-1 pb-2 text-xs font-semibold text-blue-600 border-b-2 border-blue-600 transition-colors">
+          Operational Status
+        </button>
+        <button type="button" id="tab-btn-issue" onclick="switchReportTab('issue')"
+                class="flex-1 pb-2 text-xs font-medium text-slate-500 hover:text-slate-700 transition-colors">
+          Report Issue / Discrepancy
+        </button>
+      </div>
+
+      <!-- TAB 1: OPERATIONAL STATUS FORM -->
+      <form id="form-report-status" class="space-y-4">
         {% csrf_token %}
-        <input type="hidden" id="report-atm-id" />
+        <input type="hidden" id="report-status-atm-id" />
 
-        <!-- Status radio buttons -->
         <div>
-          <label class="block text-xs font-semibold text-slate-600 mb-2">Status *</label>
-          <div class="grid grid-cols-2 gap-2">
-            <label class="status-radio-label flex items-center gap-2 border-2 border-slate-200
-                          rounded-xl p-3 cursor-pointer hover:border-emerald-400 transition-colors">
-              <input type="radio" name="report-status" value="ONLINE" class="accent-emerald-500" />
-              <span class="text-sm font-medium text-slate-700">✅ Online</span>
+          <label class="block text-xs font-semibold text-slate-600 mb-2">Select Current Operational Status *</label>
+          <div class="space-y-2">
+            <label class="status-radio-label flex items-center gap-3 border-2 border-slate-200 rounded-xl p-3 cursor-pointer hover:border-emerald-400 hover:bg-emerald-50/20 transition-all">
+              <input type="radio" name="report-op-status" value="ONLINE" class="accent-emerald-600 w-4 h-4" required />
+              <div>
+                <p class="text-sm font-semibold text-slate-800">✅ Working / Operational</p>
+                <p class="text-xs text-slate-500">ATM is online and dispensing cash</p>
+              </div>
             </label>
-            <label class="status-radio-label flex items-center gap-2 border-2 border-slate-200
-                          rounded-xl p-3 cursor-pointer hover:border-red-400 transition-colors">
-              <input type="radio" name="report-status" value="NO_CASH" class="accent-red-500" />
-              <span class="text-sm font-medium text-slate-700">💸 No Cash</span>
+            <label class="status-radio-label flex items-center gap-3 border-2 border-slate-200 rounded-xl p-3 cursor-pointer hover:border-amber-400 hover:bg-amber-50/20 transition-all">
+              <input type="radio" name="report-op-status" value="NO_CASH" class="accent-amber-500 w-4 h-4" />
+              <div>
+                <p class="text-sm font-semibold text-slate-800">💸 Out of Cash</p>
+                <p class="text-xs text-slate-500">ATM is online but has no cash available</p>
+              </div>
             </label>
-            <label class="status-radio-label flex items-center gap-2 border-2 border-slate-200
-                          rounded-xl p-3 cursor-pointer hover:border-slate-400 transition-colors">
-              <input type="radio" name="report-status" value="OFFLINE" class="accent-slate-500" />
-              <span class="text-sm font-medium text-slate-700">🚫 Offline</span>
-            </label>
-            <label class="status-radio-label flex items-center gap-2 border-2 border-slate-200
-                          rounded-xl p-3 cursor-pointer hover:border-amber-400 transition-colors">
-              <input type="radio" name="report-status" value="LONG_LINE" class="accent-amber-500" />
-              <span class="text-sm font-medium text-slate-700">🕐 Long Line</span>
+            <label class="status-radio-label flex items-center gap-3 border-2 border-slate-200 rounded-xl p-3 cursor-pointer hover:border-red-400 hover:bg-red-50/20 transition-all">
+              <input type="radio" name="report-op-status" value="OFFLINE" class="accent-red-500 w-4 h-4" />
+              <div>
+                <p class="text-sm font-semibold text-slate-800">🚫 Not Working / Offline</p>
+                <p class="text-xs text-slate-500">ATM is offline, out of service, or maintenance</p>
+              </div>
             </label>
           </div>
         </div>
 
-        <!-- Tags multi-select -->
-        <div>
-          <label class="block text-xs font-semibold text-slate-600 mb-2">Tags (optional)</label>
-          <div id="tag-checkboxes" class="flex flex-wrap gap-2">
-            <!-- Populated by JS after fetching /api/atms/tags/ -->
-            <span class="text-xs text-slate-400 italic">Loading tags…</span>
-          </div>
-        </div>
-
-        <!-- Note -->
-        <div>
-          <label class="block text-xs font-semibold text-slate-600 mb-1">Note (optional)</label>
-          <textarea id="report-note" rows="2"
-                    placeholder="Any additional details?"
-                    class="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm resize-none
-                           focus:outline-none focus:ring-2 focus:ring-blue-300"></textarea>
-        </div>
-
-        <p id="report-error" class="text-xs text-red-600 hidden"></p>
+        <p id="report-status-error" class="text-xs text-red-600 hidden font-medium"></p>
+        <p id="report-status-success" class="text-xs text-emerald-600 hidden font-medium"></p>
 
         <div class="flex gap-3 pt-2">
           <button type="button" onclick="closeModal('modal-report')"
-                  class="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600
-                         text-sm font-medium hover:bg-slate-50 transition-colors">
+                  class="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 text-sm font-medium hover:bg-slate-50 transition-colors">
             Cancel
           </button>
-          <button type="submit"
-                  class="flex-1 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white
-                         text-sm font-semibold transition-colors shadow-sm shadow-amber-500/30">
-            Submit Report
+          <button type="submit" id="btn-submit-status"
+                  class="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold transition-colors shadow-sm shadow-blue-500/30">
+            Submit Status
+          </button>
+        </div>
+      </form>
+
+      <!-- TAB 2: ISSUE / DISCREPANCY FORM -->
+      <form id="form-report-issue" class="space-y-4 hidden">
+        {% csrf_token %}
+        <input type="hidden" id="report-issue-atm-id" />
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 mb-1">Issue Type *</label>
+          <select id="issue-type" required onchange="onIssueTypeChanged()"
+                  class="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300 bg-white">
+            <option value="LOCATION_INACCURATE">📍 Incorrect ATM Location</option>
+            <option value="INACCURATE_INFO">ℹ️ Incorrect / Inaccurate Information</option>
+            <option value="FEE_DISCREPANCY">💰 Fee Discrepancy</option>
+            <option value="OTHER_ISSUE">⚠️ Other Issue</option>
+            <option value="GENERAL_NOTE">📝 General Note</option>
+          </select>
+        </div>
+
+        <!-- Conditional Actual Fee Input -->
+        <div id="actual-fee-container" class="hidden">
+          <label class="block text-xs font-semibold text-slate-600 mb-1">Actual Fee Charged (₱)</label>
+          <input type="number" step="0.01" min="0" id="issue-actual-fee" placeholder="e.g. 18.00"
+                 class="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300" />
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 mb-1">Comment / Details *</label>
+          <textarea id="issue-comment" required rows="3"
+                    placeholder="Describe the issue or notes..."
+                    class="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-amber-300"></textarea>
+        </div>
+
+        <p id="report-issue-error" class="text-xs text-red-600 hidden font-medium"></p>
+        <p id="report-issue-success" class="text-xs text-emerald-600 hidden font-medium"></p>
+
+        <div class="flex gap-3 pt-2">
+          <button type="button" onclick="closeModal('modal-report')"
+                  class="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 text-sm font-medium hover:bg-slate-50 transition-colors">
+            Cancel
+          </button>
+          <button type="submit" id="btn-submit-issue"
+                  class="flex-1 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold transition-colors shadow-sm shadow-amber-500/30">
+            Submit Issue Report
           </button>
         </div>
       </form>
@@ -481,25 +541,22 @@
     /* ------------------------------------------------------------------ */
     /* 2.  Leaflet Map Initialisation                                       */
     /* ------------------------------------------------------------------ */
-    // Default centre: Metro Manila
     const DEFAULT_LAT = 14.5995;
     const DEFAULT_LNG = 120.9842;
     const DEFAULT_ZOOM = 13;
 
     const map = L.map('map', { zoomControl: true }).setView([DEFAULT_LAT, DEFAULT_LNG], DEFAULT_ZOOM);
 
-    // Esri World Street Map tile layer (reliable, no API key required, no strict referer/rate blocking)
     L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
       attribution: 'Tiles &copy; Esri &mdash; Source: Esri, DeLorme, NAVTEQ, USGS, Intermap, iPC, METI, NRCAN, Esri Japan, METI, Esri China (Hong Kong), Esri (Thailand), TomTom',
       maxZoom: 19
     }).addTo(map);
 
-    // Ensure Leaflet correctly calculates map container dimensions
     setTimeout(() => { map.invalidateSize(); }, 250);
     window.addEventListener('resize', () => map.invalidateSize());
 
     /* ------------------------------------------------------------------ */
-    /* 3.  Marker factory — colour-coded by ATM status                     */
+    /* 3.  Marker factory                                                  */
     /* ------------------------------------------------------------------ */
     const STATUS_CLASSES = {
       ONLINE:    'online',
@@ -507,6 +564,7 @@
       NO_CASH:   'no_cash',
       OFFLINE:   'offline',
       UNKNOWN:   'unknown',
+      NEW:       'new_pin',
     };
 
     function createPinIcon(status) {
@@ -515,7 +573,7 @@
         className: '',
         html: `<div class="marker-pin ${cls}"></div>`,
         iconSize:   [28, 28],
-        iconAnchor: [14, 28],   // tip of the pin points to the coordinate
+        iconAnchor: [14, 28],
         popupAnchor:[0, -28],
       });
     }
@@ -523,21 +581,130 @@
     /* ------------------------------------------------------------------ */
     /* 4.  Application state                                               */
     /* ------------------------------------------------------------------ */
-    let allAtms        = [];        // Full GeoJSON feature array from server
-    let markerLayer    = L.layerGroup().addTo(map);  // All ATM markers
-    let userMarker     = null;      // Blue dot for user position
-    let activeFilters  = { status: 'ALL', bank: 'ALL' };
-    let tagsCache      = [];        // Cached tag list from /api/atms/tags/
+    let allAtms         = [];
+    let banksCache      = [];
+    let networksCache   = [];
+    let markerLayer     = L.layerGroup().addTo(map);
+    let placementMarker = null;
+    let isAddMode       = false;
+    let userMarker      = null;
+    let activeFilters   = { status: 'ALL', bank: 'ALL' };
 
     /* ------------------------------------------------------------------ */
-    /* 5.  Fetch all ATMs on page load                                     */
+    /* 5.  Fetch metadata: Banks & Card Networks                           */
+    /* ------------------------------------------------------------------ */
+    async function ensureBanksLoaded() {
+      if (banksCache.length) return banksCache;
+      try {
+        const res = await fetch('/api/atms/banks/');
+        if (!res.ok) throw new Error(`Banks fetch error: ${res.status}`);
+        banksCache = await res.json();
+        renderBankOptions();
+      } catch (err) {
+        console.error('Failed to load banks:', err);
+      }
+      return banksCache;
+    }
+
+    function renderBankOptions() {
+      // 1. Bank filter in sidebar
+      const bankFilter = document.getElementById('bank-filter');
+      if (bankFilter) {
+        const currVal = bankFilter.value;
+        bankFilter.innerHTML = '<option value="ALL">All Banks</option>' +
+          banksCache.map(b => `<option value="${b.bank_id}">${escapeHtml(b.bank_name)}</option>`).join('');
+        bankFilter.value = currVal || 'ALL';
+      }
+
+      // 2. Bank select in Add ATM modal
+      const addBank = document.getElementById('add-bank');
+      if (addBank) {
+        addBank.innerHTML = '<option value="">Select bank…</option>' +
+          banksCache.map(b => `<option value="${b.bank_id}">${escapeHtml(b.bank_name)}</option>`).join('');
+      }
+    }
+
+    async function ensureNetworksLoaded() {
+      if (networksCache.length) return networksCache;
+      try {
+        const res = await fetch('/api/atms/networks/');
+        if (!res.ok) throw new Error(`Networks fetch error: ${res.status}`);
+        networksCache = await res.json();
+        renderNetworkCheckboxes();
+      } catch (err) {
+        console.error('Failed to load networks:', err);
+      }
+      return networksCache;
+    }
+
+    function renderNetworkCheckboxes() {
+      const container = document.getElementById('add-networks-container');
+      if (!container) return;
+      if (!networksCache.length) {
+        container.innerHTML = '<span class="text-xs text-slate-400 italic">No card networks available</span>';
+        return;
+      }
+      container.innerHTML = networksCache.map(net => `
+        <label class="flex items-center gap-2 text-xs text-slate-700 bg-white border border-slate-200/80 p-2 rounded-lg cursor-pointer hover:border-emerald-400 transition-colors">
+          <input type="checkbox" name="add-network" value="${net.network_id}" class="accent-emerald-600 rounded" />
+          <span class="font-medium truncate">${escapeHtml(net.network_name)}</span>
+        </label>
+      `).join('');
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* 6.  Parse, validate, and filter ATM data                            */
+    /* ------------------------------------------------------------------ */
+    function parseAndFilterATMs(rawData) {
+      const rawFeatures = Array.isArray(rawData) ? rawData : (rawData.features || []);
+      const valid = [];
+
+      rawFeatures.forEach((item, idx) => {
+        const isGeoJson = item && item.type === 'Feature' && item.geometry;
+        const p = isGeoJson ? (item.properties || {}) : item;
+        const id = (isGeoJson && item.id != null) ? item.id : (p.atm_id || item.atm_id);
+
+        let lng = null;
+        let lat = null;
+
+        if (isGeoJson && Array.isArray(item.geometry.coordinates)) {
+          lng = parseFloat(item.geometry.coordinates[0]);
+          lat = parseFloat(item.geometry.coordinates[1]);
+        }
+        if ((lat == null || isNaN(lat)) && (p.latitude != null || item.latitude != null)) {
+          lat = parseFloat(p.latitude != null ? p.latitude : item.latitude);
+        }
+        if ((lng == null || isNaN(lng)) && (p.longitude != null || item.longitude != null)) {
+          lng = parseFloat(p.longitude != null ? p.longitude : item.longitude);
+        }
+
+        // Validate coordinates
+        if (lat == null || lng == null || isNaN(lat) || isNaN(lng) ||
+            lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+          console.warn(`[ATMosphere] Skipping invalid ATM record #${id ?? idx} ("${p.name || 'Unnamed'}"): Missing or invalid coordinates [lat=${lat}, lng=${lng}]`);
+          return;
+        }
+
+        valid.push({
+          id: id,
+          type: 'Feature',
+          geometry: { type: 'Point', coordinates: [lng, lat] },
+          properties: p,
+        });
+      });
+
+      return valid;
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* 7.  Fetch all ATMs on page load                                     */
     /* ------------------------------------------------------------------ */
     async function loadAllATMs() {
       try {
-        const res  = await fetch('/api/atms/');
+        const res = await fetch('/api/atms/');
         if (!res.ok) throw new Error(`Server error: ${res.status}`);
         const data = await res.json();
-        allAtms = data.features || [];
+        allAtms = parseAndFilterATMs(data);
         renderMarkers(allAtms);
         renderSidebarList(allAtms);
       } catch (err) {
@@ -546,7 +713,7 @@
     }
 
     /* ------------------------------------------------------------------ */
-    /* 6.  Fetch nearby ATMs (after Locate Me)                             */
+    /* 8.  Fetch nearby ATMs (after Locate Me)                             */
     /* ------------------------------------------------------------------ */
     async function loadNearbyATMs(lat, lng, radius = 3000) {
       try {
@@ -554,7 +721,7 @@
         const res  = await fetch(url);
         if (!res.ok) throw new Error(`Server error: ${res.status}`);
         const data = await res.json();
-        allAtms = data.features || [];
+        allAtms = parseAndFilterATMs(data);
         renderMarkers(allAtms);
         renderSidebarList(allAtms);
       } catch (err) {
@@ -563,83 +730,87 @@
     }
 
     /* ------------------------------------------------------------------ */
-    /* 7.  Render markers on the Leaflet map                               */
+    /* 9.  Render markers on the Leaflet map                               */
     /* ------------------------------------------------------------------ */
     function renderMarkers(features) {
       markerLayer.clearLayers();
-
       const filtered = applyFilters(features);
 
       filtered.forEach(feature => {
-        const p   = feature.properties;
-        const geo = feature.geometry;           // { type:"Point", coordinates:[lng,lat] }
+        const p   = feature.properties || {};
+        const geo = feature.geometry;
+        if (!geo || !geo.coordinates) return;
         const lat = geo.coordinates[1];
         const lng = geo.coordinates[0];
 
         const marker = L.marker([lat, lng], { icon: createPinIcon(p.current_status) });
-
-        // Build popup HTML
-        marker.bindPopup(buildPopupHtml(feature), { maxWidth: 280 });
-
-        // Clicking the marker also highlights the sidebar card
+        marker.bindPopup(buildPopupHtml(feature), { maxWidth: 290 });
         marker.on('click', () => highlightSidebarCard(feature.id));
-
         markerLayer.addLayer(marker);
       });
     }
 
     /* ------------------------------------------------------------------ */
-    /* 8.  Build popup HTML for a GeoJSON feature                          */
+    /* 10. Build popup HTML for a GeoJSON feature                          */
     /* ------------------------------------------------------------------ */
     function buildPopupHtml(feature) {
-      const p = feature.properties;
+      const p = feature.properties || {};
+      const geo = feature.geometry || { coordinates: [0, 0] };
+      const lat = geo.coordinates[1];
+      const lng = geo.coordinates[0];
+      const status = p.current_status || 'UNKNOWN';
+      const statusLabel = p.current_status_label || (status === 'ONLINE' ? 'Online / Operational' : (status === 'NO_CASH' ? 'No Cash' : (status === 'OFFLINE' ? 'Offline' : 'Unknown')));
+      const bankName = p.bank_name || p.bank_display || 'ATM';
+      const address = p.address_line || p.address || '';
 
-      const statusBadgeHtml = `
-        <span class="inline-block px-2 py-0.5 rounded-full text-xs font-semibold badge-${p.current_status}">
-          ${p.current_status_label}
-        </span>`;
-
-      const tagsHtml = (p.active_tags && p.active_tags.length)
-        ? p.active_tags.map(t =>
-            `<span class="inline-block bg-slate-100 text-slate-600 text-xs px-2 py-0.5 rounded-full">${t.name}</span>`
-          ).join(' ')
-        : '<span class="text-slate-400 text-xs italic">No tags</span>';
+      const networksHtml = (p.networks && p.networks.length)
+        ? p.networks.map(n => `<span class="inline-block bg-blue-50 text-blue-700 text-[10px] font-semibold px-2 py-0.5 rounded-full border border-blue-100">${escapeHtml(n.network_name)}</span>`).join(' ')
+        : '<span class="text-slate-400 text-xs italic">No networks listed</span>';
 
       const reportedHtml = p.last_reported_by
-        ? `<p class="text-xs text-slate-400 mt-1">Reported ${p.last_reported_at} by <strong>${p.last_reported_by}</strong></p>`
-        : `<p class="text-xs text-slate-400 mt-1">No reports yet — be the first!</p>`;
+        ? `<p class="text-[11px] text-slate-500 mt-1.5 flex items-center gap-1"><i data-lucide="clock" class="w-3 h-3 text-slate-400"></i> Reported ${escapeHtml(p.last_reported_at)} by <strong>${escapeHtml(p.last_reported_by)}</strong></p>`
+        : `<p class="text-[11px] text-slate-400 mt-1.5 italic">No status reports yet — be the first to report!</p>`;
 
       return `
-        <div class="font-sans">
-          <p class="font-bold text-slate-800 text-sm leading-tight mb-1">${escapeHtml(p.name)}</p>
-          <p class="text-xs text-slate-500 mb-2">${escapeHtml(p.bank_display)}</p>
-          <div class="mb-2">${statusBadgeHtml}</div>
-          <div class="flex flex-wrap gap-1 mb-2">${tagsHtml}</div>
+        <div class="font-sans p-1">
+          <div class="flex items-start justify-between gap-2 mb-1.5">
+            <div>
+              <p class="font-bold text-slate-900 text-sm leading-tight">${escapeHtml(p.name)}</p>
+              <p class="text-xs font-medium text-slate-500 mt-0.5">${escapeHtml(bankName)}</p>
+            </div>
+            <span class="inline-block px-2.5 py-0.5 rounded-full text-[11px] font-bold badge-${status} flex-shrink-0">
+              ${escapeHtml(statusLabel)}
+            </span>
+          </div>
+          ${address ? `<p class="text-xs text-slate-600 mb-1 leading-snug">${escapeHtml(address)}</p>` : ''}
+          <p class="text-[11px] text-slate-400 font-mono mb-2 flex items-center gap-1">
+            <span>📍</span>
+            <span>${lat.toFixed(5)}, ${lng.toFixed(5)}</span>
+          </p>
+          <div class="flex flex-wrap gap-1 mb-2">${networksHtml}</div>
           ${reportedHtml}
-          <div class="flex gap-2 mt-3">
-            <button
+          <div class="flex gap-2 mt-3 pt-2 border-t border-slate-100">
+            <button type="button"
               onclick="openDetailModal(${feature.id})"
-              class="flex-1 text-xs bg-slate-100 hover:bg-slate-200 text-slate-700
-                     font-medium py-1.5 rounded-lg transition-colors">
+              class="flex-1 text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold py-1.5 px-2 rounded-lg transition-colors flex items-center justify-center gap-1">
               Details
             </button>
-            <button
-              onclick="openReportModal(${feature.id}, '${escapeHtml(p.name)}')"
-              class="flex-1 text-xs bg-amber-500 hover:bg-amber-600 text-white
-                     font-medium py-1.5 rounded-lg transition-colors">
-              Report
+            <button type="button"
+              onclick="openReportModal(${feature.id}, '${escapeHtml(p.name)}', '${escapeHtml(bankName)}')"
+              class="flex-1 text-xs bg-amber-500 hover:bg-amber-600 text-white font-semibold py-1.5 px-2 rounded-lg transition-colors flex items-center justify-center gap-1 shadow-sm shadow-amber-500/20">
+              Report ATM
             </button>
           </div>
         </div>`;
     }
 
     /* ------------------------------------------------------------------ */
-    /* 9.  Sidebar ATM list                                                 */
+    /* 10. Sidebar ATM list                                                */
     /* ------------------------------------------------------------------ */
     function renderSidebarList(features) {
-      const list      = document.getElementById('atm-list');
+      const list        = document.getElementById('atm-list');
       const placeholder = document.getElementById('atm-list-placeholder');
-      const filtered  = applyFilters(features);
+      const filtered    = applyFilters(features);
 
       if (!filtered.length) {
         list.innerHTML = '';
@@ -650,29 +821,33 @@
 
       placeholder.classList.add('hidden');
       list.innerHTML = filtered.map(f => buildSidebarCard(f)).join('');
-      // Re-init Lucide for dynamically inserted icons
       lucide.createIcons({ node: list });
     }
 
     function buildSidebarCard(feature) {
-      const p = feature.properties;
+      const p = feature.properties || {};
+      const status = p.current_status || 'UNKNOWN';
+      const statusLabel = p.current_status_label || (status === 'ONLINE' ? 'Online' : (status === 'NO_CASH' ? 'No Cash' : (status === 'OFFLINE' ? 'Offline' : 'Unknown')));
+      const bankName = p.bank_name || p.bank_display || 'Bank';
+      const address = p.address_line || p.address || '';
+
       return `
         <div class="atm-card px-4 py-3" id="sidebar-card-${feature.id}"
              onclick="focusMarker(${feature.id})">
           <div class="flex items-start justify-between gap-2">
             <div class="flex-1 min-w-0">
               <p class="text-sm font-semibold text-slate-800 truncate">${escapeHtml(p.name)}</p>
-              <p class="text-xs text-slate-500 truncate">${escapeHtml(p.bank_display)}</p>
+              <p class="text-xs text-slate-500 truncate">${escapeHtml(bankName)}</p>
             </div>
             <span class="inline-block px-2 py-0.5 rounded-full text-xs font-semibold
-                         badge-${p.current_status} flex-shrink-0">
-              ${p.current_status_label}
+                         badge-${status} flex-shrink-0">
+              ${escapeHtml(statusLabel)}
             </span>
           </div>
-          ${p.address ? `<p class="text-xs text-slate-400 mt-1 truncate">${escapeHtml(p.address)}</p>` : ''}
+          ${address ? `<p class="text-xs text-slate-400 mt-1 truncate">${escapeHtml(address)}</p>` : ''}
           ${p.last_reported_at
-            ? `<p class="text-xs text-slate-400 mt-1">Updated ${p.last_reported_at}</p>`
-            : '<p class="text-xs text-slate-300 mt-1 italic">No reports yet</p>'}
+            ? `<p class="text-[11px] text-slate-400 mt-1">Updated ${escapeHtml(p.last_reported_at)}</p>`
+            : '<p class="text-[11px] text-slate-300 mt-1 italic">No reports yet</p>'}
         </div>`;
     }
 
@@ -685,17 +860,13 @@
       }
     }
 
-    /* ------------------------------------------------------------------ */
-    /* 10. Focus / pan map to an ATM when sidebar card is clicked           */
-    /* ------------------------------------------------------------------ */
     function focusMarker(atmId) {
       highlightSidebarCard(atmId);
       const feature = allAtms.find(f => f.id === atmId);
-      if (!feature) return;
+      if (!feature || !feature.geometry) return;
       const [lng, lat] = feature.geometry.coordinates;
       map.setView([lat, lng], Math.max(map.getZoom(), 16));
 
-      // Open the popup on the right marker
       markerLayer.eachLayer(marker => {
         const pos = marker.getLatLng();
         if (Math.abs(pos.lat - lat) < 0.000001 && Math.abs(pos.lng - lng) < 0.000001) {
@@ -705,13 +876,15 @@
     }
 
     /* ------------------------------------------------------------------ */
-    /* 11. Filter logic                                                     */
+    /* 11. Filter logic                                                    */
     /* ------------------------------------------------------------------ */
     function applyFilters(features) {
       return features.filter(f => {
-        const p = f.properties;
+        const p = f.properties || {};
         const statusOk = activeFilters.status === 'ALL' || p.current_status === activeFilters.status;
-        const bankOk   = activeFilters.bank   === 'ALL' || p.bank === activeFilters.bank;
+        const bankOk   = activeFilters.bank === 'ALL' ||
+                         String(p.bank_id) === String(activeFilters.bank) ||
+                         String(p.bank) === String(activeFilters.bank);
         return statusOk && bankOk;
       });
     }
@@ -719,7 +892,6 @@
     // Status filter buttons
     document.querySelectorAll('.filter-btn-status').forEach(btn => {
       btn.addEventListener('click', () => {
-        // Toggle active styling
         document.querySelectorAll('.filter-btn-status').forEach(b => {
           b.classList.remove('bg-blue-600', 'text-white', 'border-blue-600',
                              'bg-emerald-500', 'bg-red-500', 'bg-slate-500', 'bg-amber-500');
@@ -732,14 +904,17 @@
     });
 
     // Bank filter select
-    document.getElementById('bank-filter').addEventListener('change', e => {
-      activeFilters.bank = e.target.value;
-      renderMarkers(allAtms);
-      renderSidebarList(allAtms);
-    });
+    const bankFilterEl = document.getElementById('bank-filter');
+    if (bankFilterEl) {
+      bankFilterEl.addEventListener('change', e => {
+        activeFilters.bank = e.target.value;
+        renderMarkers(allAtms);
+        renderSidebarList(allAtms);
+      });
+    }
 
     /* ------------------------------------------------------------------ */
-    /* 12. Locate Me button                                                 */
+    /* 12. Locate Me button                                                */
     /* ------------------------------------------------------------------ */
     document.getElementById('btn-locate').addEventListener('click', () => {
       if (!navigator.geolocation) {
@@ -755,11 +930,8 @@
         pos => {
           const { latitude: lat, longitude: lng } = pos.coords;
           statusEl.textContent = `Located at ${lat.toFixed(5)}, ${lng.toFixed(5)}`;
-
-          // Pan map to user location
           map.setView([lat, lng], 15);
 
-          // Place / move user's blue dot marker
           const userIcon = L.circleMarker([lat, lng], {
             radius: 8, fillColor: '#3b82f6', color: '#fff',
             weight: 2, opacity: 1, fillOpacity: 0.9,
@@ -767,7 +939,6 @@
           if (userMarker) userMarker.remove();
           userMarker = userIcon.addTo(map).bindPopup('📍 You are here').openPopup();
 
-          // Fetch nearby ATMs from API
           loadNearbyATMs(lat, lng, 3000);
         },
         err => {
@@ -779,53 +950,127 @@
     });
 
     /* ------------------------------------------------------------------ */
-    /* 13. Click-to-add ATM pin on map                                     */
+    /* 13. "Add ATM" Interactive Mode & Location Placement                 */
     /* ------------------------------------------------------------------ */
-    map.on('click', e => {
+    async function startAddMode() {
+      isAddMode = true;
+      document.getElementById('add-mode-banner').classList.remove('hidden');
+      document.getElementById('map').style.cursor = 'crosshair';
+
+      const btn = document.getElementById('btn-start-add');
+      if (btn) {
+        btn.classList.add('ring-2', 'ring-emerald-400', 'ring-offset-2');
+      }
+
+      await ensureBanksLoaded();
+      await ensureNetworksLoaded();
+    }
+
+    function cancelAddMode() {
+      isAddMode = false;
+      document.getElementById('add-mode-banner').classList.add('hidden');
+      document.getElementById('map').style.cursor = '';
+
+      const btn = document.getElementById('btn-start-add');
+      if (btn) {
+        btn.classList.remove('ring-2', 'ring-emerald-400', 'ring-offset-2');
+      }
+
+      if (placementMarker) {
+        placementMarker.remove();
+        placementMarker = null;
+      }
+
+      closeModal('modal-add-atm');
+      document.getElementById('form-add-atm').reset();
+      document.getElementById('add-atm-error').classList.add('hidden');
+      document.getElementById('add-atm-success').classList.add('hidden');
+    }
+
+    function updateAddCoordinates(lat, lng) {
+      document.getElementById('add-lat').value = parseFloat(lat).toFixed(6);
+      document.getElementById('add-lng').value = parseFloat(lng).toFixed(6);
+    }
+
+    // Sync marker when manual coordinate inputs change
+    ['add-lat', 'add-lng'].forEach(id => {
+      document.getElementById(id).addEventListener('change', () => {
+        const lat = parseFloat(document.getElementById('add-lat').value);
+        const lng = parseFloat(document.getElementById('add-lng').value);
+        if (!isNaN(lat) && !isNaN(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+          if (placementMarker) {
+            placementMarker.setLatLng([lat, lng]);
+            map.panTo([lat, lng]);
+          }
+        }
+      });
+    });
+
+    // Map click handler
+    map.on('click', async e => {
+      if (!isAddMode) return;
+
       const { lat, lng } = e.latlng;
-      document.getElementById('add-lat').value = lat.toFixed(6);
-      document.getElementById('add-lng').value = lng.toFixed(6);
+      updateAddCoordinates(lat, lng);
+
+      if (placementMarker) {
+        placementMarker.setLatLng([lat, lng]);
+      } else {
+        placementMarker = L.marker([lat, lng], {
+          draggable: true,
+          icon: createPinIcon('NEW')
+        }).addTo(map);
+
+        placementMarker.on('dragend', () => {
+          const pos = placementMarker.getLatLng();
+          updateAddCoordinates(pos.lat, pos.lng);
+        });
+      }
+
+      await ensureBanksLoaded();
+      await ensureNetworksLoaded();
       openModal('modal-add-atm');
     });
 
     /* ------------------------------------------------------------------ */
-    /* 14. Modal helpers                                                   */
-    /* ------------------------------------------------------------------ */
-    function openModal(id) {
-      document.getElementById(id).classList.remove('hidden');
-    }
-    function closeModal(id) {
-      document.getElementById(id).classList.add('hidden');
-    }
-
-    // Close modal on backdrop click
-    document.querySelectorAll('.modal-backdrop').forEach(el => {
-      el.addEventListener('click', e => {
-        if (e.target === el) closeModal(el.id);
-      });
-    });
-
-    /* ------------------------------------------------------------------ */
-    /* 15. Submit new ATM (Add ATM modal form)                             */
+    /* 14. Submit new ATM                                                  */
     /* ------------------------------------------------------------------ */
     document.getElementById('form-add-atm').addEventListener('submit', async e => {
       e.preventDefault();
-      const errorEl = document.getElementById('add-atm-error');
+      const errorEl   = document.getElementById('add-atm-error');
+      const successEl = document.getElementById('add-atm-success');
+      const submitBtn = document.getElementById('btn-submit-add-atm');
+
       errorEl.classList.add('hidden');
+      successEl.classList.add('hidden');
+
+      const selectedNetworks = Array.from(
+        document.querySelectorAll('[name="add-network"]:checked')
+      ).map(cb => parseInt(cb.value));
 
       const payload = {
-        name:      document.getElementById('add-name').value.trim(),
-        bank:      document.getElementById('add-bank').value,
-        address:   document.getElementById('add-address').value.trim(),
-        latitude:  parseFloat(document.getElementById('add-lat').value),
-        longitude: parseFloat(document.getElementById('add-lng').value),
+        name:         document.getElementById('add-name').value.trim(),
+        bank:         parseInt(document.getElementById('add-bank').value),
+        address_line: document.getElementById('add-address').value.trim(),
+        latitude:     parseFloat(document.getElementById('add-lat').value),
+        longitude:    parseFloat(document.getElementById('add-lng').value),
+        network_ids:  selectedNetworks,
       };
 
-      if (!payload.name || !payload.bank) {
-        errorEl.textContent = 'Name and bank are required.';
+      if (!payload.name || isNaN(payload.bank) || !payload.address_line) {
+        errorEl.textContent = 'Please fill out all required fields (Name, Bank, and Address).';
         errorEl.classList.remove('hidden');
         return;
       }
+
+      if (isNaN(payload.latitude) || isNaN(payload.longitude)) {
+        errorEl.textContent = 'Please provide valid latitude and longitude coordinates.';
+        errorEl.classList.remove('hidden');
+        return;
+      }
+
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = '<span>Saving ATM…</span>';
 
       try {
         const res = await fetch('/api/atms/add/', {
@@ -838,92 +1083,117 @@
         });
 
         if (!res.ok) {
-          const err = await res.json();
-          throw new Error(JSON.stringify(err));
+          const errData = await res.json();
+          let msg = 'Failed to add ATM.';
+          if (typeof errData === 'object') {
+            msg = Object.entries(errData)
+              .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(' ') : v}`)
+              .join(' | ');
+          }
+          throw new Error(msg);
         }
 
-        closeModal('modal-add-atm');
-        document.getElementById('form-add-atm').reset();
-        // Reload all ATMs so the new pin appears immediately
-        await loadAllATMs();
+        const newFeature = await res.json();
+        successEl.textContent = 'ATM added successfully!';
+        successEl.classList.remove('hidden');
+
+        setTimeout(async () => {
+          cancelAddMode();
+          await loadAllATMs();
+
+          // Pan and focus new ATM
+          const newId = newFeature.id || newFeature.properties?.atm_id;
+          if (newId) {
+            focusMarker(newId);
+          }
+        }, 600);
+
       } catch (err) {
-        errorEl.textContent = `Failed to add ATM: ${err.message}`;
+        errorEl.textContent = err.message || 'Error creating ATM.';
         errorEl.classList.remove('hidden');
         console.error(err);
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = '<span>Add ATM Pin</span>';
       }
     });
 
     /* ------------------------------------------------------------------ */
-    /* 16. Report Status modal                                             */
+    /* 15. Report ATM Modal & Submission                                   */
     /* ------------------------------------------------------------------ */
-    async function openReportModal(atmId, atmName) {
-      // Close any other open modal first
+    function openReportModal(atmId, atmName, atmBank = '') {
       closeModal('modal-detail');
 
-      document.getElementById('report-atm-id').value   = atmId;
+      document.getElementById('report-status-atm-id').value = atmId;
+      document.getElementById('report-issue-atm-id').value  = atmId;
       document.getElementById('report-atm-name').textContent = atmName;
-      document.getElementById('report-note').value = '';
-      document.getElementById('report-error').classList.add('hidden');
-      // Deselect all radios
-      document.querySelectorAll('[name="report-status"]').forEach(r => r.checked = false);
+      document.getElementById('report-atm-bank').textContent = atmBank;
 
-      // Load tags if not already cached
-      await ensureTagsLoaded();
+      // Reset forms
+      document.getElementById('form-report-status').reset();
+      document.getElementById('form-report-issue').reset();
+      document.getElementById('report-status-error').classList.add('hidden');
+      document.getElementById('report-status-success').classList.add('hidden');
+      document.getElementById('report-issue-error').classList.add('hidden');
+      document.getElementById('report-issue-success').classList.add('hidden');
+
+      switchReportTab('status');
       openModal('modal-report');
     }
 
-    async function ensureTagsLoaded() {
-      if (tagsCache.length) {
-        renderTagCheckboxes();
-        return;
-      }
-      try {
-        const res  = await fetch('/api/atms/tags/');
-        if (!res.ok) return;
-        tagsCache  = await res.json();
-        renderTagCheckboxes();
-      } catch (err) {
-        console.error('Failed to load tags:', err);
+    function switchReportTab(tab) {
+      const btnStatus  = document.getElementById('tab-btn-status');
+      const btnIssue   = document.getElementById('tab-btn-issue');
+      const formStatus = document.getElementById('form-report-status');
+      const formIssue  = document.getElementById('form-report-issue');
+
+      if (tab === 'status') {
+        btnStatus.className = 'flex-1 pb-2 text-xs font-semibold text-blue-600 border-b-2 border-blue-600 transition-colors';
+        btnIssue.className  = 'flex-1 pb-2 text-xs font-medium text-slate-500 hover:text-slate-700 transition-colors';
+        formStatus.classList.remove('hidden');
+        formIssue.classList.add('hidden');
+      } else {
+        btnIssue.className  = 'flex-1 pb-2 text-xs font-semibold text-amber-600 border-b-2 border-amber-500 transition-colors';
+        btnStatus.className = 'flex-1 pb-2 text-xs font-medium text-slate-500 hover:text-slate-700 transition-colors';
+        formIssue.classList.remove('hidden');
+        formStatus.classList.add('hidden');
       }
     }
 
-    function renderTagCheckboxes() {
-      const container = document.getElementById('tag-checkboxes');
-      if (!tagsCache.length) {
-        container.innerHTML = '<span class="text-xs text-slate-400 italic">No tags available</span>';
-        return;
+    function onIssueTypeChanged() {
+      const type = document.getElementById('issue-type').value;
+      const feeContainer = document.getElementById('actual-fee-container');
+      if (type === 'FEE_DISCREPANCY') {
+        feeContainer.classList.remove('hidden');
+      } else {
+        feeContainer.classList.add('hidden');
       }
-      container.innerHTML = tagsCache.map(tag => `
-        <label class="flex items-center gap-1.5 text-xs text-slate-700 bg-slate-100
-                       hover:bg-blue-50 px-2.5 py-1.5 rounded-full cursor-pointer transition-colors">
-          <input type="checkbox" name="report-tag" value="${tag.id}"
-                 class="accent-blue-600 w-3 h-3" />
-          ${escapeHtml(tag.name)}
-        </label>`).join('');
     }
 
-    document.getElementById('form-report').addEventListener('submit', async e => {
+    // Submit Operational Status report
+    document.getElementById('form-report-status').addEventListener('submit', async e => {
       e.preventDefault();
-      const errorEl = document.getElementById('report-error');
-      errorEl.classList.add('hidden');
+      const errorEl   = document.getElementById('report-status-error');
+      const successEl = document.getElementById('report-status-success');
+      const submitBtn = document.getElementById('btn-submit-status');
 
-      const statusEl = document.querySelector('[name="report-status"]:checked');
+      errorEl.classList.add('hidden');
+      successEl.classList.add('hidden');
+
+      const statusEl = document.querySelector('[name="report-op-status"]:checked');
       if (!statusEl) {
-        errorEl.textContent = 'Please select a status.';
+        errorEl.textContent = 'Please choose an operational status.';
         errorEl.classList.remove('hidden');
         return;
       }
 
-      const selectedTags = Array.from(
-        document.querySelectorAll('[name="report-tag"]:checked')
-      ).map(cb => parseInt(cb.value));
-
       const payload = {
-        atm:    parseInt(document.getElementById('report-atm-id').value),
+        atm:    parseInt(document.getElementById('report-status-atm-id').value),
         status: statusEl.value,
-        note:   document.getElementById('report-note').value.trim(),
-        tags:   selectedTags,
       };
+
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Submitting…';
 
       try {
         const res = await fetch('/api/atms/report/', {
@@ -936,70 +1206,147 @@
         });
 
         if (!res.ok) {
-          const err = await res.json();
-          throw new Error(JSON.stringify(err));
+          const errData = await res.json();
+          throw new Error(JSON.stringify(errData));
         }
 
-        closeModal('modal-report');
-        // Refresh the map data so the pin colour updates immediately
-        await loadAllATMs();
+        successEl.textContent = 'Status report submitted successfully!';
+        successEl.classList.remove('hidden');
+
+        setTimeout(async () => {
+          closeModal('modal-report');
+          await loadAllATMs();
+        }, 700);
+
       } catch (err) {
-        errorEl.textContent = `Failed to submit report: ${err.message}`;
+        errorEl.textContent = `Submission error: ${err.message}`;
         errorEl.classList.remove('hidden');
         console.error(err);
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Submit Status';
+      }
+    });
+
+    // Submit Issue report
+    document.getElementById('form-report-issue').addEventListener('submit', async e => {
+      e.preventDefault();
+      const errorEl   = document.getElementById('report-issue-error');
+      const successEl = document.getElementById('report-issue-success');
+      const submitBtn = document.getElementById('btn-submit-issue');
+
+      errorEl.classList.add('hidden');
+      successEl.classList.add('hidden');
+
+      const issueType = document.getElementById('issue-type').value;
+      const comment   = document.getElementById('issue-comment').value.trim();
+      const actualFee = document.getElementById('issue-actual-fee').value;
+
+      if (!comment) {
+        errorEl.textContent = 'Please provide details describing the issue.';
+        errorEl.classList.remove('hidden');
+        return;
+      }
+
+      const payload = {
+        atm:         parseInt(document.getElementById('report-issue-atm-id').value),
+        report_type: issueType,
+        comment:     comment,
+      };
+
+      if (issueType === 'FEE_DISCREPANCY' && actualFee) {
+        payload.actual_fee = parseFloat(actualFee);
+      }
+
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Submitting…';
+
+      try {
+        const res = await fetch('/api/atms/issues/', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCsrfToken(),
+          },
+          body: JSON.stringify(payload),
+        });
+
+        if (!res.ok) {
+          const errData = await res.json();
+          throw new Error(JSON.stringify(errData));
+        }
+
+        successEl.textContent = 'Issue report recorded successfully. Thank you!';
+        successEl.classList.remove('hidden');
+
+        setTimeout(async () => {
+          closeModal('modal-report');
+          await loadAllATMs();
+        }, 700);
+
+      } catch (err) {
+        errorEl.textContent = `Submission error: ${err.message}`;
+        errorEl.classList.remove('hidden');
+        console.error(err);
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Submit Issue Report';
       }
     });
 
     /* ------------------------------------------------------------------ */
-    /* 17. Detail modal                                                    */
+    /* 16. Detail modal                                                    */
     /* ------------------------------------------------------------------ */
     function openDetailModal(atmId) {
       const feature = allAtms.find(f => f.id === atmId);
       if (!feature) return;
-      const p = feature.properties;
+      const p = feature.properties || {};
+
+      const bankName = p.bank_name || p.bank_display || 'Bank';
+      const address  = p.address_line || p.address || '';
+      const status   = p.current_status || 'UNKNOWN';
+      const statusLabel = p.current_status_label || (status === 'ONLINE' ? 'Online / Operational' : (status === 'NO_CASH' ? 'No Cash' : (status === 'OFFLINE' ? 'Offline' : 'Unknown')));
 
       document.getElementById('detail-title').textContent = p.name;
       document.getElementById('detail-report-btn').onclick =
-        () => openReportModal(atmId, p.name);
+        () => openReportModal(atmId, p.name, bankName);
 
-      const tagsHtml = (p.active_tags && p.active_tags.length)
-        ? p.active_tags.map(t =>
-            `<span class="inline-block bg-slate-100 text-slate-600 text-xs px-2 py-0.5 rounded-full">${escapeHtml(t.name)}</span>`
-          ).join(' ')
-        : '<span class="text-slate-400 italic text-xs">None</span>';
+      const networksHtml = (p.networks && p.networks.length)
+        ? p.networks.map(n => `<span class="inline-block bg-blue-50 text-blue-700 text-xs px-2.5 py-0.5 rounded-full font-medium border border-blue-100">${escapeHtml(n.network_name)}</span>`).join(' ')
+        : '<span class="text-slate-400 italic text-xs">No card networks listed</span>';
 
       document.getElementById('detail-body').innerHTML = `
         <div class="flex items-center gap-2">
           <span class="text-xs text-slate-500 w-24 flex-shrink-0">Bank</span>
-          <span class="font-semibold">${escapeHtml(p.bank_display)}</span>
+          <span class="font-semibold text-slate-800">${escapeHtml(bankName)}</span>
         </div>
         <div class="flex items-center gap-2">
           <span class="text-xs text-slate-500 w-24 flex-shrink-0">Status</span>
-          <span class="inline-block px-2 py-0.5 rounded-full text-xs font-semibold badge-${p.current_status}">
-            ${p.current_status_label}
+          <span class="inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold badge-${status}">
+            ${escapeHtml(statusLabel)}
           </span>
         </div>
-        ${p.address ? `
+        ${address ? `
         <div class="flex items-start gap-2">
           <span class="text-xs text-slate-500 w-24 flex-shrink-0 pt-0.5">Address</span>
-          <span>${escapeHtml(p.address)}</span>
+          <span class="text-slate-700 leading-snug">${escapeHtml(address)}</span>
         </div>` : ''}
         <div class="flex items-start gap-2">
-          <span class="text-xs text-slate-500 w-24 flex-shrink-0 pt-0.5">Tags</span>
-          <div class="flex flex-wrap gap-1">${tagsHtml}</div>
+          <span class="text-xs text-slate-500 w-24 flex-shrink-0 pt-0.5">Networks</span>
+          <div class="flex flex-wrap gap-1">${networksHtml}</div>
         </div>
         <div class="flex items-center gap-2">
           <span class="text-xs text-slate-500 w-24 flex-shrink-0">Reports</span>
-          <span>${p.report_count} crowd report${p.report_count !== 1 ? 's' : ''}</span>
+          <span>${p.report_count || 0} crowd report${p.report_count !== 1 ? 's' : ''}</span>
         </div>
         ${p.last_reported_at ? `
         <div class="flex items-center gap-2">
           <span class="text-xs text-slate-500 w-24 flex-shrink-0">Last update</span>
-          <span>${p.last_reported_at} by <strong>${escapeHtml(p.last_reported_by)}</strong></span>
+          <span>${escapeHtml(p.last_reported_at)} by <strong>${escapeHtml(p.last_reported_by || 'Anonymous')}</strong></span>
         </div>` : ''}
         <div class="flex items-center gap-2">
           <span class="text-xs text-slate-500 w-24 flex-shrink-0">Coordinates</span>
-          <span class="font-mono text-xs">
+          <span class="font-mono text-xs text-slate-600">
             ${feature.geometry.coordinates[1].toFixed(5)},
             ${feature.geometry.coordinates[0].toFixed(5)}
           </span>
@@ -1008,6 +1355,28 @@
       closeModal('modal-report');
       openModal('modal-detail');
     }
+
+    /* ------------------------------------------------------------------ */
+    /* 17. Modal helpers                                                   */
+    /* ------------------------------------------------------------------ */
+    function openModal(id) {
+      document.getElementById(id).classList.remove('hidden');
+    }
+    function closeModal(id) {
+      document.getElementById(id).classList.add('hidden');
+    }
+
+    document.querySelectorAll('.modal-backdrop').forEach(el => {
+      el.addEventListener('click', e => {
+        if (e.target === el) {
+          if (el.id === 'modal-add-atm') {
+            cancelAddMode();
+          } else {
+            closeModal(el.id);
+          }
+        }
+      });
+    });
 
     /* ------------------------------------------------------------------ */
     /* 18. Utility — XSS-safe HTML escaping                                */
@@ -1023,8 +1392,10 @@
     }
 
     /* ------------------------------------------------------------------ */
-    /* 19. Bootstrap — load all ATMs on page ready                         */
+    /* 19. Bootstrap — initialize metadata and load ATMs                   */
     /* ------------------------------------------------------------------ */
+    ensureBanksLoaded();
+    ensureNetworksLoaded();
     loadAllATMs();
 
   </script>

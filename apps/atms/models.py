@@ -225,7 +225,9 @@ class ATMReport(models.Model):
     """
     class ReportType(models.TextChoices):
         FEE_DISCREPANCY = 'FEE_DISCREPANCY', _('Fee Discrepancy')
-        LOCATION_INACCURATE = 'LOCATION_INACCURATE', _('Location Inaccurate')
+        LOCATION_INACCURATE = 'LOCATION_INACCURATE', _('Incorrect ATM Location')
+        INACCURATE_INFO = 'INACCURATE_INFO', _('Inaccurate Information')
+        OTHER_ISSUE = 'OTHER_ISSUE', _('Other Issue')
         GENERAL_NOTE = 'GENERAL_NOTE', _('General Note')
 
     report_id = models.BigAutoField(primary_key=True)

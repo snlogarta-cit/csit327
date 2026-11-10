@@ -25,6 +25,7 @@ from .serializers import (
     BankSerializer,
     CardNetworkSerializer,
     StatusReportSerializer,
+    HAS_DRF_GIS,
 )
 
 
@@ -65,14 +66,30 @@ def _haversine(lat1, lon1, lat2, lon2):
 
 
 class ATMListView(APIView):
-    """Returns all ATMs as a GeoJSON FeatureCollection."""
+    """Returns all ATMs as a GeoJSON FeatureCollection or creates a new ATM."""
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
 
     def get(self, request):
         atms = list(_atm_queryset_with_latest_report())
         _attach_latest_report(atms)
         serializer = ATMGeoSerializer(atms, many=True, context={'request': request})
-        return Response(serializer.data)
+        data = serializer.data
+        if not HAS_DRF_GIS:
+            data = {'type': 'FeatureCollection', 'features': data}
+        return Response(data)
+
+    def post(self, request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return Response(
+                {'detail': 'Authentication credentials were not provided.'},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+        serializer = ATMCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        atm = serializer.save()
+        _attach_latest_report([atm])
+        geo_data = ATMGeoSerializer(atm, context={'request': request}).data
+        return Response(geo_data, status=status.HTTP_201_CREATED)
 
 
 class ATMNearbyView(APIView):
@@ -108,7 +125,10 @@ class ATMNearbyView(APIView):
         sorted_atms = [item[1] for item in nearby_atms]
 
         serializer = ATMGeoSerializer(sorted_atms, many=True, context={'request': request})
-        return Response(serializer.data)
+        data = serializer.data
+        if not HAS_DRF_GIS:
+            data = {'type': 'FeatureCollection', 'features': data}
+        return Response(data)
 
 
 class StatusReportView(generics.CreateAPIView):
@@ -116,8 +136,18 @@ class StatusReportView(generics.CreateAPIView):
     serializer_class = StatusReportSerializer
     permission_classes = [permissions.IsAuthenticated]
 
-    def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
+    def create(self, request, *args, **kwargs):
+        # Support delegating to ATMReportSerializer if report_type is supplied
+        if 'report_type' in request.data and not any(k in request.data for k in ('is_online', 'has_cash', 'status')):
+            rep_serializer = ATMReportSerializer(data=request.data)
+            rep_serializer.is_valid(raise_exception=True)
+            report = rep_serializer.save(user=self.request.user)
+            return Response(ATMReportSerializer(report).data, status=status.HTTP_201_CREATED)
+
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        report = serializer.save(user=self.request.user)
+        return Response(StatusReportSerializer(report).data, status=status.HTTP_201_CREATED)
 
 
 class ATMReportCreateView(generics.CreateAPIView):
@@ -133,6 +163,14 @@ class ATMAddView(generics.CreateAPIView):
     """Authenticated users add a new ATM pin."""
     serializer_class = ATMCreateSerializer
     permission_classes = [permissions.IsAuthenticated]
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        atm = serializer.save()
+        _attach_latest_report([atm])
+        geo_data = ATMGeoSerializer(atm, context={'request': request}).data
+        return Response(geo_data, status=status.HTTP_201_CREATED)
 
 
 class BankListView(generics.ListAPIView):

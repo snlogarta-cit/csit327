@@ -26,9 +26,11 @@ User = get_user_model()
 # ---------------------------------------------------------------------------
 
 class BankSerializer(serializers.ModelSerializer):
+    atm_count = serializers.IntegerField(read_only=True)
+
     class Meta:
         model = Bank
-        fields = ['bank_id', 'bank_name', 'logo_url']
+        fields = ['bank_id', 'bank_name', 'logo_url', 'atm_count']
 
 
 class CardNetworkSerializer(serializers.ModelSerializer):

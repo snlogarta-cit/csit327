@@ -12,7 +12,7 @@ API endpoints powering the ATM Social Map:
 """
 
 import math
-from django.db.models import Prefetch
+from django.db.models import Count, Exists, OuterRef, Prefetch
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -29,8 +29,8 @@ from .serializers import (
 )
 
 
-def _atm_queryset_with_latest_report():
-    return (
+def _atm_queryset_with_latest_report(*, unreported_only=False):
+    queryset = (
         ATM.objects
         .select_related('bank')
         .prefetch_related(
@@ -44,6 +44,10 @@ def _atm_queryset_with_latest_report():
             )
         )
     )
+    if unreported_only:
+        reports = StatusReport.objects.filter(atm_id=OuterRef('pk'))
+        queryset = queryset.filter(~Exists(reports))
+    return queryset
 
 
 def _attach_latest_report(atm_list):
@@ -70,7 +74,9 @@ class ATMListView(APIView):
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
 
     def get(self, request):
-        atms = list(_atm_queryset_with_latest_report())
+        atms = list(_atm_queryset_with_latest_report(
+            unreported_only=request.query_params.get('unreported') == '1',
+        ))
         _attach_latest_report(atms)
         serializer = ATMGeoSerializer(atms, many=True, context={'request': request})
         data = serializer.data
@@ -111,7 +117,9 @@ class ATMNearbyView(APIView):
         except (ValueError, TypeError):
             radius = 3000.0
 
-        all_atms = list(_atm_queryset_with_latest_report())
+        all_atms = list(_atm_queryset_with_latest_report(
+            unreported_only=request.query_params.get('unreported') == '1',
+        ))
         _attach_latest_report(all_atms)
 
         nearby_atms = []
@@ -174,8 +182,8 @@ class ATMAddView(generics.CreateAPIView):
 
 
 class BankListView(generics.ListAPIView):
-    """List all banks for dropdowns/filters."""
-    queryset = Bank.objects.all()
+    """List all banks and their mapped ATM counts for dropdowns/filters."""
+    queryset = Bank.objects.annotate(atm_count=Count('atms')).order_by('bank_name')
     serializer_class = BankSerializer
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
 

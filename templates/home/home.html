@@ -227,6 +227,11 @@
             <option value="ALL">All Banks</option>
           </select>
         </div>
+        <label class="flex items-center gap-2 text-xs text-slate-700">
+          <input type="checkbox" id="unreported-filter" class="accent-blue-600">
+          Unreported only
+        </label>
+        <p id="atm-feed-status" class="text-xs text-slate-500 hidden" role="status"></p>
       </div>
 
       <!-- ── ATM List ── -->
@@ -589,12 +594,17 @@
     let isAddMode       = false;
     let userMarker      = null;
     let activeFilters   = { status: 'ALL', bank: 'ALL' };
+    const unreportedFilter = document.getElementById('unreported-filter');
+    const atmFeedStatus = document.getElementById('atm-feed-status');
+    let atmFeedUrl = '/api/atms/';
+    let atmFeedRequest;
+    let showingUnreported = false;
 
     /* ------------------------------------------------------------------ */
     /* 5.  Fetch metadata: Banks & Card Networks                           */
     /* ------------------------------------------------------------------ */
-    async function ensureBanksLoaded() {
-      if (banksCache.length) return banksCache;
+    async function ensureBanksLoaded(refresh = false) {
+      if (banksCache.length && !refresh) return banksCache;
       try {
         const res = await fetch('/api/atms/banks/');
         if (!res.ok) throw new Error(`Banks fetch error: ${res.status}`);
@@ -612,15 +622,21 @@
       if (bankFilter) {
         const currVal = bankFilter.value;
         bankFilter.innerHTML = '<option value="ALL">All Banks</option>' +
-          banksCache.map(b => `<option value="${b.bank_id}">${escapeHtml(b.bank_name)}</option>`).join('');
+          banksCache.map(b => {
+            const count = b.atm_count;
+            const label = count === 1 ? 'ATM' : 'ATMs';
+            return `<option value="${b.bank_id}">${escapeHtml(b.bank_name)} (${count} ${label})</option>`;
+          }).join('');
         bankFilter.value = currVal || 'ALL';
       }
 
       // 2. Bank select in Add ATM modal
       const addBank = document.getElementById('add-bank');
       if (addBank) {
+        const currVal = addBank.value;
         addBank.innerHTML = '<option value="">Select bank…</option>' +
           banksCache.map(b => `<option value="${b.bank_id}">${escapeHtml(b.bank_name)}</option>`).join('');
+        addBank.value = currVal;
       }
     }
 
@@ -699,33 +715,44 @@
     /* ------------------------------------------------------------------ */
     /* 7.  Fetch all ATMs on page load                                     */
     /* ------------------------------------------------------------------ */
-    async function loadAllATMs() {
-      try {
-        const res = await fetch('/api/atms/');
-        if (!res.ok) throw new Error(`Server error: ${res.status}`);
-        const data = await res.json();
-        allAtms = parseAndFilterATMs(data);
-        renderMarkers(allAtms);
-        renderSidebarList(allAtms);
-      } catch (err) {
-        console.error('Failed to load ATMs:', err);
-      }
+    function loadAllATMs() {
+      return loadATMFeed('/api/atms/');
     }
 
     /* ------------------------------------------------------------------ */
     /* 8.  Fetch nearby ATMs (after Locate Me)                             */
     /* ------------------------------------------------------------------ */
-    async function loadNearbyATMs(lat, lng, radius = 3000) {
+    function loadNearbyATMs(lat, lng, radius = 3000) {
+      return loadATMFeed(`/api/atms/nearby/?lat=${lat}&lng=${lng}&radius=${radius}`);
+    }
+
+    async function loadATMFeed(feedUrl) {
+      atmFeedUrl = feedUrl;
+      atmFeedRequest?.abort();
+      const request = new AbortController();
+      atmFeedRequest = request;
+      const unreported = unreportedFilter.checked;
+      const url = new URL(feedUrl, window.location.origin);
+      if (unreported) url.searchParams.set('unreported', '1');
+
+      atmFeedStatus.textContent = 'Loading ATMs…';
+      atmFeedStatus.classList.remove('hidden');
       try {
-        const url  = `/api/atms/nearby/?lat=${lat}&lng=${lng}&radius=${radius}`;
-        const res  = await fetch(url);
+        const res = await fetch(url, { signal: request.signal });
         if (!res.ok) throw new Error(`Server error: ${res.status}`);
         const data = await res.json();
+        if (request.signal.aborted) return;
+
         allAtms = parseAndFilterATMs(data);
+        showingUnreported = unreported;
         renderMarkers(allAtms);
         renderSidebarList(allAtms);
+        atmFeedStatus.classList.add('hidden');
       } catch (err) {
-        console.error('Failed to load nearby ATMs:', err);
+        if (request.signal.aborted) return;
+        unreportedFilter.checked = showingUnreported;
+        atmFeedStatus.textContent = 'Could not load ATMs. Try again.';
+        console.error('Failed to load ATMs:', err);
       }
     }
 
@@ -812,15 +839,12 @@
       const placeholder = document.getElementById('atm-list-placeholder');
       const filtered    = applyFilters(features);
 
-      if (!filtered.length) {
-        list.innerHTML = '';
-        list.appendChild(placeholder);
-        placeholder.classList.remove('hidden');
-        return;
-      }
-
-      placeholder.classList.add('hidden');
       list.innerHTML = filtered.map(f => buildSidebarCard(f)).join('');
+      list.appendChild(placeholder);
+      placeholder.classList.toggle('hidden', filtered.length > 0);
+      placeholder.querySelector('p').textContent = showingUnreported
+        ? 'No unreported ATMs match your filters.'
+        : 'No ATMs match your search.';
       lucide.createIcons({ node: list });
     }
 
@@ -912,6 +936,8 @@
         renderSidebarList(allAtms);
       });
     }
+
+    unreportedFilter.addEventListener('change', () => loadATMFeed(atmFeedUrl));
 
     /* ------------------------------------------------------------------ */
     /* 12. Locate Me button                                                */
@@ -1099,6 +1125,7 @@
 
         setTimeout(async () => {
           cancelAddMode();
+          ensureBanksLoaded(true);
           await loadAllATMs();
 
           // Pan and focus new ATM

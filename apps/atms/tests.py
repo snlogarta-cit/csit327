@@ -295,3 +295,51 @@ class ATMFeatureTests(TestCase):
         self.assertEqual(res_nets.status_code, 200)
         networks = res_nets.json()
         self.assertTrue(any(n['network_name'] == 'BancNet' for n in networks))
+
+    def test_bank_list_counts_atms_and_keeps_banks_without_pins(self):
+        ATM.objects.create(
+            name='Second Branch ATM', bank=self.bank,
+            latitude=Decimal('14.55'), longitude=Decimal('121.02'),
+        )
+        empty_bank = Bank.objects.create(bank_name='Another Bank')
+
+        response = self.client.get(reverse('atms:bank-list'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [(bank['bank_id'], bank['bank_name'], bank['atm_count']) for bank in response.json()],
+            [(empty_bank.pk, empty_bank.bank_name, 0), (self.bank.pk, self.bank.bank_name, 2)],
+        )
+
+    def test_unreported_filter_on_map_and_nearby_feeds(self):
+        StatusReport.objects.create(atm=self.atm, user=self.user, is_online=True, has_cash=True)
+        nearby = ATM.objects.create(
+            name='Nearby ATM', bank=self.bank,
+            latitude=self.atm.latitude, longitude=self.atm.longitude,
+        )
+        ATMReport.objects.create(
+            atm=nearby, user=self.user, report_type=ATMReport.ReportType.GENERAL_NOTE,
+        )
+        distant = ATM.objects.create(
+            name='Distant ATM', bank=self.bank,
+            latitude=Decimal('10.31'), longitude=Decimal('123.89'),
+        )
+
+        cases = [
+            ('atms:atm-list', {}, {self.atm.pk, nearby.pk, distant.pk}, {nearby.pk, distant.pk}),
+            ('atms:atm-nearby', {'lat': 14.5547, 'lng': 121.0244}, {self.atm.pk, nearby.pk}, {nearby.pk}),
+        ]
+        for route, params, all_ids, unreported_ids in cases:
+            for query, expected in [(params, all_ids), ({**params, 'unreported': '1'}, unreported_ids)]:
+                with self.subTest(route=route, query=query):
+                    response = self.client.get(reverse(route), query)
+                    self.assertEqual(response.status_code, 200)
+                    self.assertEqual({feature['id'] for feature in response.json()['features']}, expected)
+
+    def test_unreported_filter_returns_empty_collection_when_all_atms_are_reported(self):
+        StatusReport.objects.create(atm=self.atm, user=self.user, is_online=False, has_cash=False)
+
+        response = self.client.get(reverse('atms:atm-list'), {'unreported': '1'})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {'type': 'FeatureCollection', 'features': []})
